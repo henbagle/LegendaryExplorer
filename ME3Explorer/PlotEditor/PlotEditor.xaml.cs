@@ -98,11 +98,7 @@ namespace ME3Explorer.PlotEditor
                     using (var stream = new MemoryStream())
                     {
                         var codexMap = CodexMapControl.ToCodexMap();
-                        var binaryCodexMap = new BinaryBioCodexMap(codexMap.Sections, codexMap.Pages);
-
-                        binaryCodexMap.Save(stream);
-
-                        export.WriteBinary(stream.ToArray());
+                        export.WriteBinary(codexMap);
                     }
                 }
             }

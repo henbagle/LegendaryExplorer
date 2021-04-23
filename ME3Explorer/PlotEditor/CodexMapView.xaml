@@ -4,7 +4,7 @@
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 	xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
-	xmlns:codexMap="clr-namespace:Gammtek.Conduit.MassEffect3.SFXGame.CodexMap"
+	xmlns:binaryConverters="clr-namespace:ME3ExplorerCore.Unreal.BinaryConverters;assembly=ME3ExplorerCore"
 	xmlns:local="clr-namespace:ME3Explorer.PlotEditor"
     xmlns:global="clr-namespace:ME3Explorer"
     xmlns:Converters="clr-namespace:ME3Explorer.SharedUI.Converters"
@@ -54,11 +54,10 @@
                     <ListBox x:Name="CodexPagesListBox" Grid.Column="0" Grid.Row="0" Style="{DynamicResource ListBoxStyle}"
 						ItemsSource="{Binding CodexPages, NotifyOnTargetUpdated=True}" SelectedItem="{Binding SelectedCodexPage, Mode=TwoWay}">
                         <ListBox.ItemTemplate>
-                            <!--<DataTemplate DataType="{x:Type codexMap:BioCodexPage}">-->
-                            <DataTemplate>
+                            <DataTemplate DataType="{x:Type binaryConverters:BioCodexPage}" >
                                 <StackPanel HorizontalAlignment="Left">
-                                    <TextBlock Text="{Binding Key, StringFormat='Page \{0\}'}"/>
-                                    <TextBlock Text="{Binding Value.TitleAsString}" TextWrapping="Wrap" FontSize="10" Visibility="{Binding Value.TitleAsString, Converter={StaticResource NullVisibilityConverter}}"/>
+                                    <TextBlock Text="{Binding Path=ID, StringFormat='Page \{0\}'}"/>
+                                    <TextBlock Text="{Binding Path=TitleAsString}" TextWrapping="Wrap" FontSize="10" Visibility="{Binding TitleAsString, Converter={StaticResource NullVisibilityConverter}}"/>
                                     <StackPanel.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Change Id" Click="ChangeCodexPageId_Click"/>
@@ -123,19 +122,19 @@
                         <!-- Instance Version -->
                         <Label Content="Instance Version:" Grid.Column="0" Grid.Row="0" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="0" Margin="0,5"
-							Text="{Binding Path=SelectedCodexPage.Value.InstanceVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+							Text="{Binding Path=SelectedCodexPage.InstanceVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
 
                         <!-- Title -->
                         <Label Content="Title:" Grid.Column="0" Grid.Row="1" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="1" Margin="0,5"
-							Text="{Binding Path=SelectedCodexPage.Value.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" ValueChanged="txt_ValueChanged"/>
+							Text="{Binding Path=SelectedCodexPage.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" ValueChanged="txt_ValueChanged"/>
                         <TextBox Name="txt_cdxPgeTitle" Grid.Column="2" Grid.Row="1" IsReadOnly="True"
                                  VerticalAlignment="Center" Padding="3,3" Margin="10,5" HorizontalContentAlignment="Left"/>
 
                         <!-- Description -->
                         <Label Content="Description:" Grid.Column="0" Grid.Row="2" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="2" Margin="0,5"
-							Text="{Binding Path=SelectedCodexPage.Value.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" ValueChanged="txt_ValueChanged"/>
+							Text="{Binding Path=SelectedCodexPage.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" ValueChanged="txt_ValueChanged"/>
                         
                         <TextBox Name="txt_cdxPgeDesc" Grid.Column="2" Grid.Row="2" IsReadOnly="True"
                                  Grid.RowSpan="5" TextAlignment="Left" TextWrapping="Wrap" VerticalAlignment="Top" Padding="3,3" Margin="10,5"
@@ -144,27 +143,27 @@
                         <!-- Texture Index -->
                         <Label Content="Texture Index:" Grid.Column="0" Grid.Row="3" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="3" Margin="0,5"
-							Text="{Binding Path=SelectedCodexPage.Value.TextureIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+							Text="{Binding Path=SelectedCodexPage.TextureIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
 
                         <!-- Priority -->
                         <Label Content="Priority:" Grid.Column="0" Grid.Row="4" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="4" Margin="0,5"
-							Text="{Binding Path=SelectedCodexPage.Value.Priority, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+							Text="{Binding Path=SelectedCodexPage.Priority, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
 
                         <!-- Section -->
                         <Label Content="Section:" Grid.Column="0" Grid.Row="5" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="5" Margin="0,5"
-							Text="{Binding Path=SelectedCodexPage.Value.Section, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+							Text="{Binding Path=SelectedCodexPage.Section, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
 
                         <!-- Codex Sound -->
 						<Label Content="Sound Obj (v4):" Grid.Column="0" Grid.Row="6" HorizontalAlignment="Right" Width="100" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="6" Margin="0,5"
-							Text="{Binding Path=SelectedCodexPage.Value.CodexSound, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+							Text="{Binding Path=SelectedCodexPage.CodexSound, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
                         
                         <!-- Sound String-->
                         <Label Content="Sound String (v2):" Grid.Column="0" Grid.Row="7" HorizontalAlignment="Right" Width="100" />
                         <xctk:AutoSelectTextBox Grid.Column="1" Grid.Row="7" Grid.ColumnSpan="2" HorizontalAlignment="Left"
-							Text="{Binding Path=SelectedCodexPage.Value.CodexSoundString, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="200" />
+							Text="{Binding Path=SelectedCodexPage.CodexSoundString, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="200" />
                         
                     </Grid>
 				</Grid>
@@ -189,8 +188,8 @@
                             <!--<DataTemplate DataType="{x:Type codexMap:BioCodexSection}">-->
                             <DataTemplate>
                                 <StackPanel HorizontalAlignment="Left">
-                                    <TextBlock Text="{Binding Key, StringFormat='Section \{0\}'}"/>
-                                    <TextBlock Text="{Binding Value.TitleAsString}" TextWrapping="Wrap" FontSize="10" Visibility="{Binding Value.TitleAsString, Converter={StaticResource NullVisibilityConverter}}"/>
+                                    <TextBlock Text="{Binding ID, StringFormat='Section \{0\}'}"/>
+                                    <TextBlock Text="{Binding TitleAsString}" TextWrapping="Wrap" FontSize="10" Visibility="{Binding TitleAsString, Converter={StaticResource NullVisibilityConverter}}"/>
                                     <StackPanel.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Change Id" Click="ChangeCodexSectionId_Click"/>
@@ -216,8 +215,8 @@
 						</Grid.RowDefinitions>
 
 						<!-- Grid Content -->
-						<Button x:Name="AddCodexSection" Grid.Column="0" Grid.Row="0" Content="Add" Click="AddCodexSection_Click"/>
-						<Button x:Name="RemoveCodexSection" Grid.Column="2" Grid.Row="0" Content="Remove" Click="RemoveCodexSection_Click"/>
+						<Button x:Name="AddCodexSectionButton" Grid.Column="0" Grid.Row="0" Content="Add" Click="AddCodexSection_Click"/>
+						<Button x:Name="RemoveCodexSectionButton" Grid.Column="2" Grid.Row="0" Content="Remove" Click="RemoveCodexSection_Click"/>
 					</Grid>
 
                     <GridSplitter Grid.Column="1"
@@ -253,19 +252,19 @@
                         <!-- Instance Version -->
                         <Label Content="Instance Version:" Grid.Column="0" Grid.Row="0" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="0" Margin="0,5"
-							Text="{Binding Path=SelectedCodexSection.Value.InstanceVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+							Text="{Binding Path=SelectedCodexSection.InstanceVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
 
                         <!-- Title -->
                         <Label Content="Title:" Grid.Column="0" Grid.Row="1" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="1" Margin="0,5"
-							Text="{Binding Path=SelectedCodexSection.Value.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" ValueChanged="txt_ValueChanged"/>
+							Text="{Binding Path=SelectedCodexSection.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" ValueChanged="txt_ValueChanged"/>
                         <TextBox Name="txt_cdxSecTitle" Grid.Column="2" Grid.Row="1" IsReadOnly="True" 
                                  VerticalAlignment="Center" Margin ="10,5" Padding="3,3" HorizontalContentAlignment="Left"/>
 
                         <!-- Description -->
 						<Label Content="Description:" Grid.Column="0" Grid.Row="2" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="2" Margin="0,5"
-							Text="{Binding Path=SelectedCodexSection.Value.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" ValueChanged="txt_ValueChanged"/>
+							Text="{Binding Path=SelectedCodexSection.Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" ValueChanged="txt_ValueChanged"/>
                         <TextBox Name="txt_cdxSecDesc" Grid.Column="2" Grid.Row="2" IsReadOnly="True"
                                  Grid.RowSpan="5" TextAlignment="Left" TextWrapping="Wrap" VerticalAlignment="Top" MaxLines="8" Padding="3,3" Margin="10,5"
                                  HorizontalContentAlignment="Left"/>
@@ -273,22 +272,22 @@
                         <!-- Texture Index -->
 						<Label Content="Texture Index:" Grid.Column="0" Grid.Row="3" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="3" Margin="0,5"
-							Text="{Binding Path=SelectedCodexSection.Value.TextureIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+							Text="{Binding Path=SelectedCodexSection.TextureIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
 
                         <!-- Priority -->
                         <Label Content="Priority:" Grid.Column="0" Grid.Row="4" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="4" Margin="0,5"
-							Text="{Binding Path=SelectedCodexSection.Value.Priority, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+							Text="{Binding Path=SelectedCodexSection.Priority, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
 
                         <!-- Is Primary -->
                         <Label Content="Is Primary:" Grid.Column="0" Grid.Row="5" />
                         <CheckBox Grid.Column="1" Grid.Row="5" Margin="0,5"
-							IsChecked="{Binding Path=SelectedCodexSection.Value.IsPrimary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" VerticalAlignment="Center"/>
+							IsChecked="{Binding Path=SelectedCodexSection.IsPrimary, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" VerticalAlignment="Center"/>
 
                         <!-- Codex Sound -->
                         <Label Content="Sound Object:" Grid.Column="0" Grid.Row="6" />
                         <xctk:IntegerUpDown Grid.Column="1" Grid.Row="6" Margin="0,5"
-							Text="{Binding Path=SelectedCodexSection.Value.CodexSound, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+							Text="{Binding Path=SelectedCodexSection.CodexSound, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100" />
                     </Grid>
 				</Grid>
 			</TabItem>

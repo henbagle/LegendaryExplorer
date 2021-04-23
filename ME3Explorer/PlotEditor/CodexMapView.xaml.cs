@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
-using Gammtek.Conduit.MassEffect3.SFXGame.CodexMap;
+using ME3ExplorerCore.Unreal.BinaryConverters;
 using ME3Explorer.PlotEditor.Dialogs;
 using ME3Explorer;
 using ME3ExplorerCore.Gammtek;
@@ -34,13 +34,13 @@ namespace ME3Explorer.PlotEditor
 
                  throw;
             }
-            SetFromCodexMap(new BioCodexMap());
+            //SetFromCodexMap(new BioCodexMap());
         }
 
-        private ObservableCollection<KeyValuePair<int, BioCodexPage>> _codexPages;
-        private ObservableCollection<KeyValuePair<int, BioCodexSection>> _codexSections;
-        private KeyValuePair<int, BioCodexPage> _selectedCodexPage;
-        private KeyValuePair<int, BioCodexSection> _selectedCodexSection;
+        private ObservableCollection<BioCodexPage> _codexPages;
+        private ObservableCollection<BioCodexSection> _codexSections;
+        private BioCodexPage _selectedCodexPage;
+        private BioCodexSection _selectedCodexSection;
 
         public bool CanRemoveCodexPage
         {
@@ -51,7 +51,7 @@ namespace ME3Explorer.PlotEditor
                     return false;
                 }
 
-                return SelectedCodexPage.Value != null;
+                return SelectedCodexPage != null;
             }
         }
 
@@ -64,11 +64,11 @@ namespace ME3Explorer.PlotEditor
                     return false;
                 }
 
-                return SelectedCodexSection.Value != null;
+                return SelectedCodexSection != null;
             }
         }
 
-        public ObservableCollection<KeyValuePair<int, BioCodexPage>> CodexPages
+        public ObservableCollection<BioCodexPage> CodexPages
         {
             get => _codexPages;
             set
@@ -79,7 +79,7 @@ namespace ME3Explorer.PlotEditor
             }
         }
 
-        public ObservableCollection<KeyValuePair<int, BioCodexSection>> CodexSections
+        public ObservableCollection<BioCodexSection> CodexSections
         {
             get => _codexSections;
             set
@@ -89,7 +89,7 @@ namespace ME3Explorer.PlotEditor
             }
         }
 
-        public KeyValuePair<int, BioCodexPage> SelectedCodexPage
+        public BioCodexPage SelectedCodexPage
         {
             get => _selectedCodexPage;
             set
@@ -99,7 +99,7 @@ namespace ME3Explorer.PlotEditor
             }
         }
 
-        public KeyValuePair<int, BioCodexSection> SelectedCodexSection
+        public BioCodexSection SelectedCodexSection
         {
             get => _selectedCodexSection;
             set
@@ -113,7 +113,7 @@ namespace ME3Explorer.PlotEditor
         {
             if (CodexPages == null)
             {
-                CodexPages = InitCollection<KeyValuePair<int, BioCodexPage>>();
+                CodexPages = InitCollection<BioCodexPage>();
             }
 
             var dlg = new NewObjectDialog
@@ -126,34 +126,31 @@ namespace ME3Explorer.PlotEditor
             {
                 return;
             }
-
-            AddCodexPage(dlg.ObjectId);
+            AddCodexPage(new BioCodexPage { ID = dlg.ObjectId });
+            
         }
 
-        public void AddCodexPage(int id, BioCodexPage codexPage = null)
+        public void AddCodexPage(BioCodexPage codexPage)
         {
             if (CodexPages == null)
             {
-                CodexPages = InitCollection<KeyValuePair<int, BioCodexPage>>();
+                CodexPages = InitCollection<BioCodexPage>();
             }
 
-            if (id < 0)
+            if (codexPage.ID < 0 || CodexPages.Any(el => el.ID == codexPage.ID))
             {
                 return;
             }
 
-            var codexPagePair = new KeyValuePair<int, BioCodexPage>(id, codexPage ?? new BioCodexPage());
-
-            CodexPages.Add(codexPagePair);
-
-            SelectedCodexPage = codexPagePair;
+            CodexPages.Add(codexPage);
+            SelectedCodexPage = codexPage;
         }
 
-        public void addCodexSection()
+        public void AddCodexSection()
         {
             if (CodexSections == null)
             {
-                CodexSections = InitCollection<KeyValuePair<int, BioCodexSection>>();
+                CodexSections = InitCollection<BioCodexSection>();
             }
 
             var dlg = new NewObjectDialog
@@ -167,123 +164,112 @@ namespace ME3Explorer.PlotEditor
                 return;
             }
 
-            addCodexSection(dlg.ObjectId);
+            CodexSections.Add(new BioCodexSection { ID = dlg.ObjectId });
         }
 
         // Does not replace existing
-        public void addCodexSection(int id, BioCodexSection codexSection = null)
+        public void AddCodexSection(BioCodexSection codexSection)
         {
             if (CodexSections == null)
             {
-                CodexSections = InitCollection<KeyValuePair<int, BioCodexSection>>();
+                CodexSections = InitCollection<BioCodexSection>();
             }
 
-            if (CodexSections.Any(pair => pair.Key == id))
+            if (codexSection.ID < 0 || CodexSections.Any(el => el.ID == codexSection.ID))
             {
                 return;
             }
 
-            var codexSectionPair = new KeyValuePair<int, BioCodexSection>(id, codexSection ?? new BioCodexSection());
+            CodexSections.Add(codexSection);
 
-            CodexSections.Add(codexSectionPair);
-
-            SelectedCodexSection = codexSectionPair;
+            SelectedCodexSection = codexSection;
         }
 
         public void ChangeCodexPageId()
         {
-            if (SelectedCodexPage.Value == null)
+            if (SelectedCodexPage == null)
             {
                 return;
             }
 
             var dlg = new ChangeObjectIdDialog
             {
-                ContentText = $"Change id of codex page #{SelectedCodexPage.Key}",
-                ObjectId = SelectedCodexPage.Key
+                ContentText = $"Change id of codex page #{SelectedCodexPage.ID}",
+                ObjectId = SelectedCodexPage.ID
             };
 
-            if (dlg.ShowDialog() == false || dlg.ObjectId < 0 || dlg.ObjectId == SelectedCodexPage.Key)
+            if (dlg.ShowDialog() == false || dlg.ObjectId < 0 || dlg.ObjectId == SelectedCodexPage.ID)
             {
                 return;
             }
+            SelectedCodexPage.ID = dlg.ObjectId;
 
-            var codexSection = SelectedCodexPage.Value;
-
-            CodexPages.Remove(SelectedCodexPage);
-
-            AddCodexPage(dlg.ObjectId, codexSection);
 
         }
 
         public void ChangeCodexSectionId()
         {
-            if (SelectedCodexSection.Value == null)
+            if (SelectedCodexSection == null)
             {
                 return;
             }
 
             var dlg = new ChangeObjectIdDialog
             {
-                ContentText = $"Change id of codex section #{SelectedCodexSection.Key}",
-                ObjectId = SelectedCodexSection.Key
+                ContentText = $"Change id of codex section #{SelectedCodexSection.ID}",
+                ObjectId = SelectedCodexSection.ID
             };
 
-            if (dlg.ShowDialog() == false || dlg.ObjectId < 0 || dlg.ObjectId == SelectedCodexSection.Key)
+            if (dlg.ShowDialog() == false || dlg.ObjectId < 0 || dlg.ObjectId == SelectedCodexSection.ID)
             {
                 return;
             }
-
-            var codexSection = SelectedCodexSection.Value;
-
-            CodexSections.Remove(SelectedCodexSection);
-
-            addCodexSection(dlg.ObjectId, codexSection);
+            SelectedCodexSection.ID = dlg.ObjectId;
         }
 
         public void CopyCodexPage()
         {
-            if (SelectedCodexPage.Value == null)
+            if (SelectedCodexPage == null)
             {
                 return;
             }
 
             var dlg = new CopyObjectDialog
             {
-                ContentText = $"Copy codex page #{SelectedCodexPage.Key}",
+                ContentText = $"Copy codex page #{SelectedCodexPage.ID}",
                 ObjectId = GetMaxCodexPageId() + 1
             };
 
-            if (dlg.ShowDialog() == false || dlg.ObjectId < 0 || SelectedCodexPage.Key == dlg.ObjectId)
+            if (dlg.ShowDialog() == false || dlg.ObjectId < 0 || SelectedCodexPage.ID == dlg.ObjectId)
             {
                 return;
             }
 
-            AddCodexPage(dlg.ObjectId, new BioCodexPage(SelectedCodexPage.Value));
+            AddCodexPage(SelectedCodexPage.Clone(dlg.ObjectId));
         }
 
         public void CopyCodexSection()
         {
-            if (SelectedCodexSection.Value == null)
+            if (SelectedCodexSection == null)
             {
                 return;
             }
 
             var dlg = new CopyObjectDialog
             {
-                ContentText = $"Copy codex section #{SelectedCodexSection.Key}",
+                ContentText = $"Copy codex section #{SelectedCodexSection.ID}",
                 ObjectId = GetMaxCodexSectionId() + 1
             };
 
-            if (dlg.ShowDialog() == false || dlg.ObjectId < 0 || SelectedCodexSection.Key == dlg.ObjectId)
+            if (dlg.ShowDialog() == false || dlg.ObjectId < 0 || SelectedCodexSection.ID == dlg.ObjectId)
             {
                 return;
             }
 
-            addCodexSection(dlg.ObjectId, new BioCodexSection(SelectedCodexSection.Value));
+            AddCodexSection(SelectedCodexSection.Clone(dlg.ObjectId));
         }
 
-        public void GoToCodexPage(KeyValuePair<int, BioCodexPage> codexPage)
+        public void GoToCodexPage(BioCodexPage codexPage)
         {
             CodexTabControl.SelectedValue = CodexPagesTab;
             SelectedCodexPage = codexPage;
@@ -291,7 +277,7 @@ namespace ME3Explorer.PlotEditor
             CodexPagesListBox.Focus();
         }
 
-        public void GoToCodexSection(KeyValuePair<int, BioCodexSection> codexSection)
+        public void GoToCodexSection(BioCodexSection codexSection)
         {
             CodexTabControl.SelectedValue = CodexSectionsTab;
             SelectedCodexSection = codexSection;
@@ -325,23 +311,18 @@ namespace ME3Explorer.PlotEditor
                 return;
             }
 
-            using (var stream = new MemoryStream(export.Data))
-            {
-                stream.Seek(dataOffset, SeekOrigin.Begin);
-                var codexMap = BinaryBioCodexMap.Load(stream, pcc.Game == MEGame.ME3 ? Encoding.UTF8 : Encoding.ASCII);
-
-                CodexPages = InitCollection(codexMap.Pages.OrderBy(pair => pair.Key));
-                CodexSections = InitCollection(codexMap.Sections.OrderBy(pair => pair.Key));
-            }
+            var codexMap = export.GetBinaryData<BioCodexMap>();
+            CodexPages = InitCollection(codexMap.Pages.OrderBy(p => p.ID));
+            CodexSections = InitCollection(codexMap.Sections.OrderBy(s => s.ID));
 
             foreach (var page in CodexPages)
             {
-                page.Value.TitleAsString = GlobalFindStrRefbyID(page.Value.Title, pcc.Game, null);
+                page.TitleAsString = GlobalFindStrRefbyID(page.Title, pcc.Game, null);
             }
 
             foreach (var section in CodexSections)
             {
-                section.Value.TitleAsString = GlobalFindStrRefbyID(section.Value.Title, pcc.Game, null);
+                section.TitleAsString = GlobalFindStrRefbyID(section.Title, pcc.Game, null);
             }
 
             package = pcc;
@@ -350,7 +331,7 @@ namespace ME3Explorer.PlotEditor
 
         public void RemoveCodexPage()
         {
-            if (CodexPages == null || SelectedCodexPage.Value == null)
+            if (CodexPages == null || SelectedCodexPage == null)
             {
                 return;
             }
@@ -370,9 +351,9 @@ namespace ME3Explorer.PlotEditor
             }
         }
 
-        public void removeCodexSection()
+        public void RemoveCodexSection()
         {
-            if (CodexSections == null || SelectedCodexSection.Value == null)
+            if (CodexSections == null || SelectedCodexSection == null)
             {
                 return;
             }
@@ -404,39 +385,21 @@ namespace ME3Explorer.PlotEditor
                 return;
             }
 
-            byte[] codexMapData = export.Data;
-
-            if (!export.GetProperties(includeNoneProperties: true).Any())
+            BioCodexMap codexMap = new BioCodexMap
             {
-                return;
-            }
+                Pages = CodexPages.ToList(),
+                Sections = CodexSections.ToList()
+            };
 
-            var codexMapDataOffset = export.propsEnd();
-
-            byte[] bytes;
-            var codexMap = new BioCodexMap(CodexSections.ToDictionary(pair => pair.Key, pair => pair.Value),
-                CodexPages.ToDictionary(pair => pair.Key, pair => pair.Value));
-
-            // CodexMap
-            using (var stream = new MemoryStream())
-            {
-                ((BinaryBioCodexMap)codexMap).Save(stream);
-
-                bytes = stream.ToArray();
-            }
-
-            Array.Resize(ref codexMapData, codexMapDataOffset + bytes.Length);
-            bytes.CopyTo(codexMapData, codexMapDataOffset);
-
-            export.Data = codexMapData;
+            export.WriteBinary(codexMap);
         }
         
         public BioCodexMap ToCodexMap()
         {
             var codexMap = new BioCodexMap
             {
-                Pages = CodexPages.ToDictionary(pair => pair.Key, pair => pair.Value),
-                Sections = CodexSections.ToDictionary(pair => pair.Key, pair => pair.Value)
+                Pages = CodexPages.ToList(),
+                Sections = CodexSections.ToList()
             };
 
             return codexMap;
@@ -449,8 +412,8 @@ namespace ME3Explorer.PlotEditor
                 return;
             }
 
-            CodexPages = InitCollection(codexMap.Pages.OrderBy(pair => pair.Key));
-            CodexSections = InitCollection(codexMap.Sections.OrderBy(pair => pair.Key));
+            CodexPages = InitCollection(codexMap.Pages.OrderBy(p => p.ID));
+            CodexSections = InitCollection(codexMap.Sections.OrderBy(s => s.ID));
         }
         
         private static ObservableCollection<T> InitCollection<T>()
@@ -471,12 +434,12 @@ namespace ME3Explorer.PlotEditor
 
         private int GetMaxCodexPageId()
         {
-            return CodexPages.Any() ? CodexPages.Max(pair => pair.Key) : -1;
+            return CodexPages.Any() ? CodexPages.Max(pair => pair.ID) : -1;
         }
 
         private int GetMaxCodexSectionId()
         {
-            return CodexSections.Any() ? CodexSections.Max(pair => pair.Key) : -1;
+            return CodexSections.Any() ? CodexSections.Max(pair => pair.ID) : -1;
         }
 
         private void ChangeCodexPageId_Click(object sender, System.Windows.RoutedEventArgs e)
@@ -506,12 +469,12 @@ namespace ME3Explorer.PlotEditor
 
         private void RemoveCodexSection_Click(object sender, System.Windows.RoutedEventArgs e)
         {
-            removeCodexSection();
+            RemoveCodexSection();
         }
 
         private void AddCodexSection_Click(object sender, System.Windows.RoutedEventArgs e)
         {
-            addCodexSection();
+            AddCodexSection();
         }
 
         private void AddCodexPage_Click(object sender, System.Windows.RoutedEventArgs e)
@@ -523,13 +486,13 @@ namespace ME3Explorer.PlotEditor
         {
             if(package != null)
             {
-                txt_cdxPgeDesc.Text = GlobalFindStrRefbyID(SelectedCodexPage.Value?.Description ?? 0, package);
-                txt_cdxPgeTitle.Text = GlobalFindStrRefbyID(SelectedCodexPage.Value?.Title ?? 0, package);
-                txt_cdxSecDesc.Text = GlobalFindStrRefbyID(SelectedCodexSection.Value?.Description ?? 0, package);
-                txt_cdxSecTitle.Text = GlobalFindStrRefbyID(SelectedCodexSection.Value?.Title ?? 0, package);
+                txt_cdxPgeDesc.Text = GlobalFindStrRefbyID(SelectedCodexPage?.Description ?? 0, package);
+                txt_cdxPgeTitle.Text = GlobalFindStrRefbyID(SelectedCodexPage?.Title ?? 0, package);
+                txt_cdxSecDesc.Text = GlobalFindStrRefbyID(SelectedCodexSection?.Description ?? 0, package);
+                txt_cdxSecTitle.Text = GlobalFindStrRefbyID(SelectedCodexSection?.Title ?? 0, package);
 
-                if (SelectedCodexPage.Value != null) SelectedCodexPage.Value.TitleAsString = txt_cdxPgeTitle.Text;
-                if (SelectedCodexSection.Value != null) SelectedCodexSection.Value.TitleAsString = txt_cdxSecTitle.Text;
+                if (SelectedCodexPage != null) SelectedCodexPage.TitleAsString = txt_cdxPgeTitle.Text;
+                if (SelectedCodexSection != null) SelectedCodexSection.TitleAsString = txt_cdxSecTitle.Text;
             }
         }
     }

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using Gammtek.Conduit.MassEffect3.SFXGame.StateEventMap;
-using Gammtek.Conduit.MassEffect3.SFXGame.CodexMap;
+using ME3ExplorerCore.Unreal.BinaryConverters;
 using Gammtek.Conduit.MassEffect3.SFXGame.QuestMap;
 using ME3Explorer;
 using System.Windows.Data;
@@ -153,11 +153,11 @@ namespace ME3Explorer.PlotEditor
                     {
                         case "Codex Pages":
                             SearchResults.ItemsSource = parentRef.CodexMapControl.CodexPages.Where(x => 
-                                x.Value.Title == stringId || x.Value.Description == stringId);
+                                x.Title == stringId || x.Description == stringId);
                             break;
                         case "Codex Sections":
                             SearchResults.ItemsSource = parentRef.CodexMapControl.CodexSections.Where(x => 
-                                x.Value.Title == stringId || x.Value.Description == stringId);
+                                x.Title == stringId || x.Description == stringId);
                             break;
                         case "Quest Goals":
                             SearchResults.ItemsSource = parentRef.QuestMapControl.Quests.Where(x => 
@@ -228,11 +228,11 @@ namespace ME3Explorer.PlotEditor
                 case KeyValuePair<int, BioStateEvent> stateEvent:
                     parentRef.GoToStateEvent(stateEvent);
                     break;
-                case KeyValuePair<int, BioCodexPage> codexPage:
+                case BioCodexPage codexPage:
                     parentRef.MainTabControl.SelectedValue = parentRef.CodexMapControl;
                     parentRef.CodexMapControl.GoToCodexPage(codexPage);
                     break;
-                case KeyValuePair<int, BioCodexSection> codexSection:
+                case BioCodexSection codexSection:
                     parentRef.MainTabControl.SelectedValue = parentRef.CodexMapControl;
                     parentRef.CodexMapControl.GoToCodexSection(codexSection);
                     break;
