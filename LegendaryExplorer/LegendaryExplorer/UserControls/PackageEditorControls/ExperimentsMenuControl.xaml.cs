@@ -1123,6 +1123,10 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsO.DumpTOC();
         }
+        private void LE1Elevator_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsO.LE1Elevator(GetPEWindow());
+        }
         #endregion
 
 

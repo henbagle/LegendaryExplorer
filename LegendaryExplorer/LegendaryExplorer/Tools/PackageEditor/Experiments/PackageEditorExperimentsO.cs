@@ -430,5 +430,34 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             var toc = new TOCBinFile(inputFile);
             toc.DumpTOCToTxtFile(outputFile);
         }
+
+        public static void LE1Elevator(PackageEditorWindow getPeWindow)
+        {
+            IMEPackage Pcc = getPeWindow.Pcc;
+            var convo = Pcc.FindExport("sp_news_vids_D.sp_news_vids_dlg");
+            if (convo.ClassName != "BioConversation") return;
+            var props = convo.GetProperties();
+            var entries = props.GetProp<ArrayProperty<StructProperty>>("m_EntryList");
+            var one = entries[123];
+            var two = entries[125];
+            var three = entries[127];
+            one.Properties.AddOrReplaceProp(new IntProperty(6291, "nConditionalFunc"));
+            one.Properties.AddOrReplaceProp(new IntProperty(1, "nConditionalParam"));
+            one.Properties.AddOrReplaceProp(new BoolProperty(false, "bFireConditional"));
+
+            two.Properties.AddOrReplaceProp(new IntProperty(6290, "nConditionalFunc"));
+            two.Properties.AddOrReplaceProp(new IntProperty(1, "nConditionalParam"));
+            two.Properties.AddOrReplaceProp(new BoolProperty(false, "bFireConditional"));
+
+            three.Properties.AddOrReplaceProp(new IntProperty(6289, "nConditionalFunc"));
+            three.Properties.AddOrReplaceProp(new IntProperty(1, "nConditionalParam"));
+            three.Properties.AddOrReplaceProp(new BoolProperty(false, "bFireConditional"));
+
+            entries[123] = one;
+            entries[125] = two;
+            entries[127] = three;
+            props.AddOrReplaceProp(entries);
+            convo.WriteProperties(props);
+        }
     }
 }
