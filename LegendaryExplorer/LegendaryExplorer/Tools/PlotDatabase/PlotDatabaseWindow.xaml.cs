@@ -86,7 +86,7 @@ namespace LegendaryExplorer.Tools.PlotManager
         public bool ShowJournal { get => _ShowJournal; set => SetProperty(ref _ShowJournal, value); }
         private GridViewColumnHeader _lastHeaderClicked = null;
         private ListSortDirection _lastDirection = ListSortDirection.Ascending;
-        public PlotDatabase modDB = new PlotDatabase();
+        public IPlotDatabase modDB = new ModPlotDatabase();
         public ObservableCollectionExtended<PlotElementType> newItemTypes { get; } = new()
         {
             PlotElementType.State,
@@ -138,11 +138,9 @@ namespace LegendaryExplorer.Tools.PlotManager
             var rootlist3 = new List<PlotElement>();
             var dictionary3 = PlotDatabases.GetMasterDictionaryForGame(MEGame.LE3);
             rootlist3.Add(dictionary3[1]);
-            if (PlotDatabases.LoadDatabase(MEGame.LE3, false, AppDirectories.AppDataFolder))
-            {
-                var mods3 = PlotDatabases.GetMasterDictionaryForGame(MEGame.LE3, false);
-                rootlist3.Add(mods3[100000]);
-            }
+            var mods3 = PlotDatabases.GetMasterDictionaryForGame(MEGame.LE3, false);
+            rootlist3.Add(mods3[100000]);
+            
             dictionary3.Add(0, new PlotElement(0, 0, "Legendary Edition - Mass Effect 3 Plots", PlotElementType.None, -1, rootlist3, null));
             dictionary3[0].Children[0].Parent = dictionary3[0];
             dictionary3[0].Children[1].Parent = dictionary3[0];
@@ -152,11 +150,9 @@ namespace LegendaryExplorer.Tools.PlotManager
             var rootlist2 = new List<PlotElement>();
             var dictionary2 = PlotDatabases.GetMasterDictionaryForGame(MEGame.LE2);
             rootlist2.Add(dictionary2[1]);
-            if (PlotDatabases.LoadDatabase(MEGame.LE2, false, AppDirectories.AppDataFolder))
-            {
-                var mods2 = PlotDatabases.GetMasterDictionaryForGame(MEGame.LE2, false);
-                rootlist2.Add(mods2[100000]);
-            }
+            var mods2 = PlotDatabases.GetMasterDictionaryForGame(MEGame.LE2, false);
+            rootlist2.Add(mods2[100000]);
+                
             dictionary2.Add(0, new PlotElement(0, 0, "Legendary Edition - Mass Effect 2 Plots", PlotElementType.None, 0, rootlist2, null));
             dictionary2[0].Children[0].Parent = dictionary2[0];
             dictionary2[0].Children[1].Parent = dictionary2[0];
@@ -166,11 +162,9 @@ namespace LegendaryExplorer.Tools.PlotManager
             var rootlist1 = new List<PlotElement>();
             var dictionary1 = PlotDatabases.GetMasterDictionaryForGame(MEGame.LE1);
             rootlist1.Add(dictionary1[1]);
-            if (PlotDatabases.LoadDatabase(MEGame.LE1, false, AppDirectories.AppDataFolder))
-            {
-                var mods1 = PlotDatabases.GetMasterDictionaryForGame(MEGame.LE1, false);
-                rootlist1.Add(mods1[100000]);
-            }
+            var mods1 = PlotDatabases.GetMasterDictionaryForGame(MEGame.LE1, false);
+            rootlist1.Add(mods1[100000]);
+            
             dictionary1.Add(0, new PlotElement(0, 0, "Legendary Edition - Mass Effect 1 Plots", PlotElementType.None, -1, rootlist1, null));
             dictionary3[0].Children[0].Parent = dictionary3[0];
             dictionary3[0].Children[1].Parent = dictionary3[0];
@@ -590,7 +584,7 @@ namespace LegendaryExplorer.Tools.PlotManager
                 NeedsSave = false;
             }
 
-            modDB.LoadPlotsFromJSON(CurrentGame, false);
+            //modDB.LoadPlotsFromJSON(CurrentGame, false);
             RefreshTrees();
         }
 
@@ -730,7 +724,7 @@ namespace LegendaryExplorer.Tools.PlotManager
             if (SelectedNode != null)
             {
                 var command = obj.ToString();
-                var mdb = new PlotDatabase();
+                var mdb = new ModPlotDatabase();
                 switch (CurrentGame)
                 {
                     case MEGame.LE1:
@@ -1061,7 +1055,7 @@ namespace LegendaryExplorer.Tools.PlotManager
             if (dlg == MessageBoxResult.Cancel)
                 return;
             var deleteId = SelectedNode.ElementId;
-            var mdb = new PlotDatabase();
+            var mdb = new ModPlotDatabase();
             switch (CurrentGame)
             {
                 case MEGame.LE1:

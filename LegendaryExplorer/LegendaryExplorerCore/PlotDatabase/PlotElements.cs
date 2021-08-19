@@ -156,6 +156,17 @@ namespace LegendaryExplorerCore.PlotDatabase
                 }
             }
         }
+
+        public bool RemoveFromParent()
+        {
+            if (Parent != null)
+            {
+                Parent.Children.Remove(this);
+                return true;
+            }
+            return false;
+        }
+        
 #pragma warning disable
         public event PropertyChangedEventHandler PropertyChanged;
 #pragma warning restore
