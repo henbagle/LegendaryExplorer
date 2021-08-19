@@ -32,7 +32,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
     {
         public static void DumpPackageToT3D(IMEPackage package)
         {
-            var levelExport = package.Exports.FirstOrDefault(x => x.ObjectName == "Level" && x.ClassName == "PersistentLevel");
+            var levelExport =
+                package.Exports.FirstOrDefault(x => x.ObjectName == "Level" && x.ClassName == "PersistentLevel");
             if (levelExport != null)
             {
                 var level = ObjectBinary.From<Level>(levelExport);
@@ -44,7 +45,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         {
                             case "StaticMesh":
                                 var sm = ObjectBinary.From<StaticMesh>(actorExport);
-                                
+
                                 // Look at vars in sm to find what you need
                                 //ExportT3D(sm, "FILENAMEHERE.txt", null); //??
                                 break;
@@ -76,7 +77,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         {
             StreamWriter Writer = new StreamWriter(Filename, true);
 
-            Vector3 Rotator = new Vector3((float)Math.Atan2(m.M32, m.M33), (float)Math.Asin(-1 * m.M31), (float)Math.Atan2(-1 * m.M21, m.M11));
+            Vector3 Rotator = new Vector3((float)Math.Atan2(m.M32, m.M33), (float)Math.Asin(-1 * m.M31),
+                (float)Math.Atan2(-1 * m.M21, m.M11));
             float RotatorX = Rotator.X;
             RotatorX = RadianToDegrees(RotatorX);
             float RotatorY = Rotator.Y;
@@ -91,25 +93,42 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             //Indexes here is just to make names unique
             if (staticMesh != null)
             {
-                Writer.WriteLine($"Begin Actor Class=StaticMeshActor Name={staticMesh.Export.ObjectName} Archetype=StaticMeshActor'/Script/Engine.Default__StaticMeshActor'");
-                Writer.WriteLine("        Begin Object Class=StaticMeshComponent Name=\"StaticMeshComponent0\" Archetype=StaticMeshComponent'/Script/Engine.Default__StaticMeshActor:StaticMeshComponent0'");
+                Writer.WriteLine(
+                    $"Begin Actor Class=StaticMeshActor Name={staticMesh.Export.ObjectName} Archetype=StaticMeshActor'/Script/Engine.Default__StaticMeshActor'");
+                Writer.WriteLine(
+                    "        Begin Object Class=StaticMeshComponent Name=\"StaticMeshComponent0\" Archetype=StaticMeshComponent'/Script/Engine.Default__StaticMeshActor:StaticMeshComponent0'");
                 Writer.WriteLine("        End Object");
                 Writer.WriteLine("        Begin Object Name=\"StaticMeshComponent0\"");
-                Writer.WriteLine("            StaticMesh=StaticMesh'/Game/ME3/ME3Architecture/Static/" + staticMesh.Export.ObjectName + "." + staticMesh.Export.ObjectName + "'"); //oriignal code was duplicated
-                Writer.WriteLine("            RelativeLocation=(X=" + Location.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Y=" + Location.Y.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Z=" + Location.Z.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")));
-                Writer.WriteLine("            RelativeRotation=(Pitch=" + RotatorY.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Yaw=" + RotatorZ.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Roll=" + RotatorX.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + ")");
-                Writer.WriteLine("            RelativeScale3D=(X=" + IncScale3D.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Y=" + IncScale3D.Y.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Z=" + IncScale3D.Z.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + ")");
+                Writer.WriteLine("            StaticMesh=StaticMesh'/Game/ME3/ME3Architecture/Static/" +
+                                 staticMesh.Export.ObjectName + "." + staticMesh.Export.ObjectName +
+                                 "'"); //oriignal code was duplicated
+                Writer.WriteLine("            RelativeLocation=(X=" +
+                                 Location.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 "," +
+                                 "Y=" + Location.Y.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
+                                 "Z=" + Location.Z.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")));
+                Writer.WriteLine("            RelativeRotation=(Pitch=" +
+                                 RotatorY.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 "," +
+                                 "Yaw=" + RotatorZ.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
+                                 "Roll=" + RotatorX.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + ")");
+                Writer.WriteLine("            RelativeScale3D=(X=" +
+                                 IncScale3D.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 "," +
+                                 "Y=" + IncScale3D.Y.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
+                                 "Z=" + IncScale3D.Z.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + ")");
                 Writer.WriteLine("        End Object");
                 Writer.WriteLine("        StaticMeshComponent=StaticMeshComponent0");
                 Writer.WriteLine($"        ActorLabel=\"{staticMesh.Export.ObjectName}\"");
                 Writer.WriteLine("End Actor");
             }
+
             Writer.Close();
         }
 
@@ -119,7 +138,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         {
             StreamWriter Writer = new StreamWriter(Filename, true);
 
-            Vector3 Rotator = new Vector3((float)Math.Atan2(m.M32, m.M33), (float)Math.Asin(-1 * m.M31), (float)Math.Atan2(-1 * m.M21, m.M11));
+            Vector3 Rotator = new Vector3((float)Math.Atan2(m.M32, m.M33), (float)Math.Asin(-1 * m.M31),
+                (float)Math.Atan2(-1 * m.M21, m.M11));
             float RotatorX = Rotator.X;
             RotatorX = RadianToUnrealDegrees(RotatorX);
             float RotatorY = Rotator.Y;
@@ -131,9 +151,13 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
             if (STM != null)
             {
-                Writer.WriteLine("      Begin Actor Class=StaticMeshActor Name=STMC_" + STM.Export.ObjectName.Number + " Archetype=StaticMeshActor'Engine.Default__StaticMeshActor'");
-                Writer.WriteLine("          Begin Object Class=StaticMeshComponent Name=STMC_" + STM.Export.ObjectName.Number + " ObjName=" + STM.Export.ObjectName.Instanced + " Archetype=StaticMeshComponent'Engine.Default__StaticMeshActor:StaticMeshComponent0'");
-                Writer.WriteLine("              StaticMesh=StaticMesh'A_Cathedral.Static." + STM.Export.ObjectName + "'");
+                Writer.WriteLine("      Begin Actor Class=StaticMeshActor Name=STMC_" + STM.Export.ObjectName.Number +
+                                 " Archetype=StaticMeshActor'Engine.Default__StaticMeshActor'");
+                Writer.WriteLine("          Begin Object Class=StaticMeshComponent Name=STMC_" +
+                                 STM.Export.ObjectName.Number + " ObjName=" + STM.Export.ObjectName.Instanced +
+                                 " Archetype=StaticMeshComponent'Engine.Default__StaticMeshActor:StaticMeshComponent0'");
+                Writer.WriteLine(
+                    "              StaticMesh=StaticMesh'A_Cathedral.Static." + STM.Export.ObjectName + "'");
                 Writer.WriteLine("              LODData(0)=");
                 Writer.WriteLine("              VertexPositionVersionNumber=1");
                 Writer.WriteLine("              ReplacementPrimitive=None");
@@ -141,20 +165,35 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 Writer.WriteLine("              bForceDirectLightMap=True");
                 Writer.WriteLine("              bUsePrecomputedShadows=True");
                 Writer.WriteLine("              LightingChannels=(bInitialized=True,Static=True)");
-                Writer.WriteLine("              Name=\"" + STM.Export.ObjectName + "_" + STM.Export.ObjectName.Number + "\"");
-                Writer.WriteLine("              ObjectArchetype=StaticMeshComponent'Engine.Default__StaticMeshActor:StaticMeshComponent0'");
+                Writer.WriteLine("              Name=\"" + STM.Export.ObjectName + "_" + STM.Export.ObjectName.Number +
+                                 "\"");
+                Writer.WriteLine(
+                    "              ObjectArchetype=StaticMeshComponent'Engine.Default__StaticMeshActor:StaticMeshComponent0'");
                 Writer.WriteLine("          End Object");
-                Writer.WriteLine("          StaticMeshComponent=StaticMeshComponent'" + STM.Export.ObjectName.Instanced + "'");
-                Writer.WriteLine("          Components(0)=StaticMeshComponent'" + STM.Export.ObjectName.Instanced + "'");
-                Writer.WriteLine("          Location=(X=" + Location.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Y=" + Location.Y.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Z=" + Location.Z.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")));
-                Writer.WriteLine("          Rotation=(Pitch=" + RotatorY.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
-                "Yaw=" + RotatorZ.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Roll=" + RotatorX.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + ")");
-                Writer.WriteLine("          DrawScale=(X=" + IncScale3D.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Y=" + IncScale3D.Y.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
-                "Z=" + IncScale3D.Z.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + ")");
+                Writer.WriteLine("          StaticMeshComponent=StaticMeshComponent'" +
+                                 STM.Export.ObjectName.Instanced + "'");
+                Writer.WriteLine("          Components(0)=StaticMeshComponent'" + STM.Export.ObjectName.Instanced +
+                                 "'");
+                Writer.WriteLine("          Location=(X=" +
+                                 Location.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 "," +
+                                 "Y=" + Location.Y.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
+                                 "Z=" + Location.Z.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")));
+                Writer.WriteLine("          Rotation=(Pitch=" +
+                                 RotatorY.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 "Yaw=" + RotatorZ.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
+                                 "Roll=" + RotatorX.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + ")");
+                Writer.WriteLine("          DrawScale=(X=" +
+                                 IncScale3D.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 "," +
+                                 "Y=" + IncScale3D.Y.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "," +
+                                 "Z=" + IncScale3D.Z.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + ")");
                 Writer.WriteLine("          CreationTime=1.462282");
                 Writer.WriteLine("          Tag=\"StaticMeshActor\"");
                 Writer.WriteLine("          CollisionComponent=StaticMeshComponent'" + STM.Export.ObjectName + "'");
@@ -162,6 +201,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 Writer.WriteLine("          ObjectArchetype=StaticMeshActor'Engine.Default__StaticMeshActor'");
                 Writer.WriteLine("      End Actor");
             }
+
             Writer.Close();
         }
 
@@ -173,7 +213,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         {
             StreamWriter Writer = new StreamWriter(Filename, true);
 
-            Vector3 Rotator = new Vector3((float)Math.Atan2(m.M32, m.M33), (float)Math.Asin(-1 * m.M31), (float)Math.Atan2(-1 * m.M21, m.M11));
+            Vector3 Rotator = new Vector3((float)Math.Atan2(m.M32, m.M33), (float)Math.Asin(-1 * m.M31),
+                (float)Math.Atan2(-1 * m.M21, m.M11));
             float RotatorX = Rotator.X;
             RotatorX = RadianToDegrees(RotatorX);
             float RotatorY = Rotator.Y;
@@ -186,13 +227,20 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             if (STM != null)
             {
                 Writer.WriteLine($"{STM.Export.ObjectName} = instance ${STM.Export.ObjectName}");
-                Writer.WriteLine($"{STM.Export.ObjectName}.name = \"{STM.Export.ObjectName}\" --name the copy as \"{STM.Export.ObjectName}\"");
-                Writer.WriteLine("$" + STM.Export.ObjectName + ".Position=[" + Location.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
-                    ", " + Location.Y.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
-                    ", " + Location.Z.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "]");
-                Writer.WriteLine("$" + STM.Export.ObjectName + ".scale=[" + IncScale3D.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
-                    ", " + IncScale3D.Y.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
-                    ", " + IncScale3D.Z.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "]");
+                Writer.WriteLine(
+                    $"{STM.Export.ObjectName}.name = \"{STM.Export.ObjectName}\" --name the copy as \"{STM.Export.ObjectName}\"");
+                Writer.WriteLine("$" + STM.Export.ObjectName + ".Position=[" +
+                                 Location.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 ", " + Location.Y.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 ", " + Location.Z.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "]");
+                Writer.WriteLine("$" + STM.Export.ObjectName + ".scale=[" +
+                                 IncScale3D.X.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 ", " + IncScale3D.Y.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 ", " + IncScale3D.Z.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) + "]");
                 Writer.WriteLine("--Setting the rotation");
                 Writer.WriteLine("fn SetObjectRotation obj rx ry rz =");
                 Writer.WriteLine("(");
@@ -207,16 +255,23 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 Writer.WriteLine("rotate obj (angleaxis ry [0,1,0])");
                 Writer.WriteLine("rotate obj (angleaxis rz [0,0,1])");
                 Writer.WriteLine(")");
-                Writer.WriteLine("-- Set currently selected Object's rotation to " + RotatorX.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
-                    " " + RotatorY.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
-                    " " + RotatorZ.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")));
+                Writer.WriteLine("-- Set currently selected Object's rotation to " +
+                                 RotatorX.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 " " + RotatorY.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 " " + RotatorZ.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")));
                 Writer.WriteLine("SetObjectRotation $" + STM.Export.ObjectName +
-                    " " + RotatorX.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
-                    " " + RotatorY.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
-                    " " + RotatorZ.ToString("F3", System.Globalization.CultureInfo.GetCultureInfo("en-US")));
+                                 " " + RotatorX.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 " " + RotatorY.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")) +
+                                 " " + RotatorZ.ToString("F3",
+                                     System.Globalization.CultureInfo.GetCultureInfo("en-US")));
                 Writer.WriteLine("-------------------------------------------------------");
                 Writer.WriteLine("-------------------------------------------------------");
             }
+
             Writer.Close();
         }
 
@@ -224,26 +279,30 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         /// Collects all TLK exports from the entire ME1 game and exports them into a single GlobalTLK file
         /// </summary>
         /// <param name="pew">Instance of Package Editor</param>
-        public static void BuildME1SuperTLKFile (PackageEditorWindow pew)
+        public static void BuildME1SuperTLKFile(PackageEditorWindow pew)
         {
             string myBasePath = ME1Directory.DefaultGamePath;
             string searchDir = ME1Directory.CookedPCPath;
 
-            CommonOpenFileDialog d = new CommonOpenFileDialog { Title = "Select folder to search", IsFolderPicker = true, InitialDirectory = myBasePath };
+            CommonOpenFileDialog d = new CommonOpenFileDialog
+                { Title = "Select folder to search", IsFolderPicker = true, InitialDirectory = myBasePath };
             if (d.ShowDialog() == CommonFileDialogResult.Ok)
             {
                 searchDir = d.FileName;
             }
 
-            Microsoft.Win32.OpenFileDialog outputFileDialog = new () { 
-                Title = "Select GlobalTlk file to output to (GlobalTlk exports will be completely overwritten)", 
-                Filter = "*.upk|*.upk" };
+            Microsoft.Win32.OpenFileDialog outputFileDialog = new()
+            {
+                Title = "Select GlobalTlk file to output to (GlobalTlk exports will be completely overwritten)",
+                Filter = "*.upk|*.upk"
+            };
             bool? result = outputFileDialog.ShowDialog();
             if (!result.HasValue || !result.Value)
             {
                 Debug.WriteLine("No output file specified");
                 return;
             }
+
             string outputFilePath = outputFileDialog.FileName;
 
             string[] extensions = { ".u", ".upk" };
@@ -267,18 +326,22 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                     using (IMEPackage pack = MEPackageHandler.OpenMEPackage(f.FullName))
                     {
                         List<ExportEntry> tlkExports = pack.Exports.Where(x =>
-                            (x.ObjectName == "tlk" || x.ObjectName == "tlk_M" || x.ObjectName == "GlobalTlk_tlk" || x.ObjectName == "GlobalTlk_tlk_M") && x.ClassName == "BioTlkFile").ToList();
+                            (x.ObjectName == "tlk" || x.ObjectName == "tlk_M" || x.ObjectName == "GlobalTlk_tlk" ||
+                             x.ObjectName == "GlobalTlk_tlk_M") && x.ClassName == "BioTlkFile").ToList();
                         if (tlkExports.Count > 0)
                         {
                             string subPath = f.FullName.Substring(basePathLen);
                             foreach (ExportEntry exp in tlkExports)
                             {
-                                var stringMapping = ((exp.ObjectName == "tlk" || exp.ObjectName == "GlobalTlk_tlk") ? tlkLines : tlkLines_m);
+                                var stringMapping = ((exp.ObjectName == "tlk" || exp.ObjectName == "GlobalTlk_tlk")
+                                    ? tlkLines
+                                    : tlkLines_m);
                                 var talkFile = new ME1TalkFile(exp);
                                 foreach (var sref in talkFile.StringRefs)
                                 {
                                     if (sref.StringID == 0) continue; //skip blank
-                                    if (sref.Data == null || sref.Data == "-1" || sref.Data == "") continue; //skip blank
+                                    if (sref.Data == null || sref.Data == "-1" || sref.Data == "")
+                                        continue; //skip blank
 
                                     if (!stringMapping.TryGetValue(sref.StringID, out var dictEntry))
                                     {
@@ -298,7 +361,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 using (IMEPackage o = MEPackageHandler.OpenMEPackage(outputFilePath))
                 {
                     List<ExportEntry> tlkExports = o.Exports.Where(x =>
-                            (x.ObjectName == "GlobalTlk_tlk" || x.ObjectName == "GlobalTlk_tlk_M") && x.ClassName == "BioTlkFile").ToList();
+                        (x.ObjectName == "GlobalTlk_tlk" || x.ObjectName == "GlobalTlk_tlk_M") &&
+                        x.ClassName == "BioTlkFile").ToList();
                     if (tlkExports.Count > 0)
                     {
                         foreach (ExportEntry exp in tlkExports)
@@ -317,6 +381,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                             huff.serializeTalkfileToExport(exp);
                         }
                     }
+
                     o.Save();
 
                 }
@@ -347,7 +412,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
             Task.Run(() =>
             {
-                foreach (string filePath in MELoadedFiles.GetOfficialFiles(game, includeAFCs:true).Where(f => f.EndsWith(".afc", StringComparison.OrdinalIgnoreCase)))
+                foreach (string filePath in MELoadedFiles.GetOfficialFiles(game, includeAFCs: true)
+                    .Where(f => f.EndsWith(".afc", StringComparison.OrdinalIgnoreCase)))
                 {
                     var info = new FileInfo(filePath);
                     audioSizes.Add(info.Name.Split('.')[0], info.Length);
@@ -363,7 +429,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             });
         }
 
-        [DllImport(@"C:\Program Files (x86)\Audiokinetic\Wwise 2019.1.6.7110\SDK\x64_vc140\Release\bin\AkSoundEngineDLL.dll")]
+        [DllImport(
+            @"C:\Program Files (x86)\Audiokinetic\Wwise 2019.1.6.7110\SDK\x64_vc140\Release\bin\AkSoundEngineDLL.dll")]
         public static extern uint GetIDFromString(string str);
 
         public static void GenerateWwiseId(PackageEditorWindow pew)
@@ -377,9 +444,11 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
         public static void CreateTestTLKWithStringIDs(PackageEditorWindow pew)
         {
-            Microsoft.Win32.OpenFileDialog outputFileDialog = new () { 
-                Title = "Select .XML file to import", 
-                Filter = "*.xml|*.xml" };
+            Microsoft.Win32.OpenFileDialog outputFileDialog = new()
+            {
+                Title = "Select .XML file to import",
+                Filter = "*.xml|*.xml"
+            };
             bool? result = outputFileDialog.ShowDialog();
             if (!result.HasValue || !result.Value)
             {
@@ -405,25 +474,32 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
         public static void UpdateLocalFunctions(PackageEditorWindow pew)
         {
-            if (pew.TryGetSelectedExport(out var export) && ObjectBinary.From(export) is UClass uClass)
+            if (pew.TryGetSelectedExport(out var export) && ObjectBinary.From(export) is UStruct uStruct)
             {
-                uClass.UpdateChildrenChain();
-                uClass.UpdateLocalFunctions();
-                export.WriteBinary(uClass);
+                uStruct.UpdateChildrenChain(relinkChildrenStructs: false);
+                if (uStruct is UClass uClass)
+                {
+                    uClass.UpdateLocalFunctions();
+                }
+
+                export.WriteBinary(uStruct);
             }
         }
 
         public static void DumpTOC()
         {
-            Microsoft.Win32.OpenFileDialog outputFileDialog = new () { 
-                Title = "Select TOC File", 
-                Filter = "*.bin|*.bin" };
+            Microsoft.Win32.OpenFileDialog outputFileDialog = new()
+            {
+                Title = "Select TOC File",
+                Filter = "*.bin|*.bin"
+            };
             bool? result = outputFileDialog.ShowDialog();
             if (!result.HasValue || !result.Value)
             {
                 Debug.WriteLine("No output file specified");
                 return;
             }
+
             string inputFile = outputFileDialog.FileName;
             string outputFile = Path.ChangeExtension(inputFile, "txt");
 
@@ -458,6 +534,55 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             entries[127] = three;
             props.AddOrReplaceProp(entries);
             convo.WriteProperties(props);
+        }
+
+        public static void FixPinkVisor(PackageEditorWindow getPeWindow)
+        {
+            string searchDir = ME1Directory.DLCPath;
+            CommonOpenFileDialog d = new CommonOpenFileDialog
+                { Title = "Select folder to search", IsFolderPicker = true };
+            if (d.ShowDialog() == CommonFileDialogResult.Ok)
+            {
+                searchDir = d.FileName;
+            }
+            else return;
+            
+            FileInfo[] files = new DirectoryInfo(searchDir)
+                .EnumerateFiles("*", SearchOption.AllDirectories)
+                .Where(f => f.Extension.ToLower() == ".pcc")
+                .ToArray();
+            foreach (var file in files)
+            {
+                using var pcc = MEPackageHandler.OpenMEPackage(file.FullName);
+                var matInstanceConstant = pcc.FindExport("BIOG_HMM_HGR_HVY_R.BRT.HMM_BRT_HVYa_MAT_1a");
+                if (matInstanceConstant is null) break;
+                var matProps = matInstanceConstant.GetProperties();
+                var vectors = matProps.GetProp<ArrayProperty<StructProperty>>("VectorParameterValues");
+                foreach (var structProp in vectors.Values)
+                {
+                    if (structProp.GetProp<NameProperty>("ParameterName").Value == "HGR_Colour_01")
+                    {
+                        var linearColor = structProp.Properties.GetProp<StructProperty>("ParameterValue");
+                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.20784314f, "R"));
+                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.24705882f, "G"));
+                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.27058825f, "B"));
+                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0f, "A"));
+                        structProp.Properties.AddOrReplaceProp(linearColor);
+                    }
+                    else if (structProp.GetProp<NameProperty>("ParameterName").Value == "HGR_Colour_02")
+                    {
+                        var linearColor = structProp.Properties.GetProp<StructProperty>("ParameterValue");
+                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.05882353f, "R"));
+                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.07058824f, "G"));
+                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.08235294f, "B"));
+                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0f, "A"));
+                        structProp.Properties.AddOrReplaceProp(linearColor);
+                    }
+                }
+                matProps.AddOrReplaceProp(vectors);
+                matInstanceConstant.WriteProperties(matProps);
+                pcc.Save();
+            }
         }
     }
 }

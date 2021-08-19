@@ -1127,6 +1127,11 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsO.LE1Elevator(GetPEWindow());
         }
+
+        private void FixPinkVisor_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsO.FixPinkVisor(GetPEWindow());
+        }
         #endregion
 
 

@@ -117,5 +117,6 @@
         <MenuItem Header="Update Local Functions and Relink" Click="UpdateLocalFunctions_Click"/>
         <MenuItem Header="Dump TOC file" Click="DumpTOC_Click"/>
         <MenuItem Header="Fix LE1 elevator convo" Click="LE1Elevator_Click"/>
+        <MenuItem Header="Fix pink visor" Click="FixPinkVisor_Click"/>
     </MenuItem>
 </MenuItem>
