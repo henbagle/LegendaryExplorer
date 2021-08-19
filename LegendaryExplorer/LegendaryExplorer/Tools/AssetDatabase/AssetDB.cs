@@ -23,6 +23,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
         public MEGame meGame { get; set; }
         public string GenerationDate { get; set; }
         public string DataBaseversion { get; set; }
+        public MELocalization Localization { get; set; }
 
         public List<FileNameDirKeyPair> FileList { get; set; } = new();
         public List<string> ContentDir { get; set; } = new();
@@ -146,7 +147,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
     {
         public string Class { get; set; }
 
-        public string Definition_package { get; set; }
+        public int DefinitionFile { get; set; }
 
         public int Definition_UID { get; set; }
 
@@ -154,20 +155,22 @@ namespace LegendaryExplorer.Tools.AssetDatabase
 
         public bool IsModOnly { get; set; }
 
-        public HashSet<PropertyRecord> PropertyRecords { get; set; } = new();
+        public Dictionary<string, PropertyRecord> PropertyRecords { get; set; } = new();
 
         public List<ClassUsage> Usages { get; set; } = new();
 
-        public ClassRecord(string Class, string Definition_package, int Definition_UID, string SuperClass)
+        public ClassRecord(string Class, int definitionFile, int Definition_UID, string SuperClass)
         {
             this.Class = Class;
-            this.Definition_package = Definition_package;
+            this.DefinitionFile = definitionFile;
             this.Definition_UID = Definition_UID;
             this.SuperClass = SuperClass;
         }
 
         public ClassRecord()
-        { }
+        {
+            DefinitionFile = -1;
+        }
     }
     public sealed record PropertyRecord(string Property, string Type) { public PropertyRecord() : this(default, default) { } }
 

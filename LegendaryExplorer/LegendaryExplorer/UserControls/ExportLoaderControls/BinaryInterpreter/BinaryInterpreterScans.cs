@@ -5649,14 +5649,21 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                     Length = len + 4 + (Pcc.Game == MEGame.ME2 ? 4 : 1)
                 };
                 bin.JumpTo(startPos);
-                node.Items.Add(MakeByteNode(bin, "Type"));
+                node.Items.Add(Pcc.Game == MEGame.ME2 ? MakeUInt32Node(bin, "Type") : MakeByteNode(bin, "Type"));
                 node.Items.Add(MakeInt32Node(bin, "Length"));
                 node.Items.Add(MakeUInt32HexNode(bin, "ID"));
                 var endPos = startPos + node.Length;
                 switch (hircType)
                 {
                     case HIRCType.Event:
-                        node.Items.Add((Pcc.Game.IsLEGame()) ? MakeArrayNodeByteCount(bin, "Event Actions", i => MakeUInt32HexNode(bin, $"{i}")) : MakeArrayNode(bin, "Event Actions", i => MakeUInt32HexNode(bin, $"{i}")));
+                        if (Pcc.Game.IsLEGame())
+                        {
+                            MakeArrayNodeByteCount(bin, "Event Actions", i => MakeUInt32HexNode(bin, $"{i}"));
+                        }
+                        else
+                        {
+                            MakeArrayNode(bin, "Event Actions", i => MakeUInt32HexNode(bin, $"{i}"));
+                        }
                         break;
                     case HIRCType.EventAction:
                         {
@@ -6326,10 +6333,8 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                 yield return node;
             }
 
-            yield return MakeUInt32Node(bin, "State unknown 1");
-            yield return MakeUInt32Node(bin, "State unknown 2");
-            yield return MakeInt32Node(bin, "State unknown 3");
-            yield return MakeInt32Node(bin, "State unknown 4");
+            yield return MakeUInt64Node(bin, "ProbeMask");
+            yield return MakeInt64Node(bin, "IgnoreMask");
             yield return MakeInt16Node(bin, "Label Table Offset");
             yield return new BinInterpNode(bin.Position, $"StateFlags: {getStateFlagsStr((EStateFlags)bin.ReadUInt32())}") { Length = 4 };
             yield return MakeArrayNode(bin, "Local Functions", i =>
@@ -6900,6 +6905,10 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         private static BinInterpNode MakeFloatNode(EndianReader bin, string name) => new BinInterpNode(bin.Position, $"{name}: {bin.ReadFloat()}", NodeType.StructLeafFloat) { Length = 4 };
 
         private static BinInterpNode MakeUInt32Node(EndianReader bin, string name) => new BinInterpNode(bin.Position, $"{name}: {bin.ReadUInt32()}") { Length = 4 };
+
+        private static BinInterpNode MakeUInt64Node(EndianReader bin, string name) => new BinInterpNode(bin.Position, $"{name}: {bin.ReadUInt64()}") { Length = 8 };
+
+        private static BinInterpNode MakeInt64Node(EndianReader bin, string name) => new BinInterpNode(bin.Position, $"{name}: {bin.ReadInt64()}") { Length = 8 };
 
         private static BinInterpNode MakeUInt32HexNode(EndianReader bin, string name) => new BinInterpNode(bin.Position, $"{name}: {bin.ReadUInt32():X8}") { Length = 4 };
 

@@ -481,7 +481,6 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 {
                     uClass.UpdateLocalFunctions();
                 }
-
                 export.WriteBinary(uStruct);
             }
         }

@@ -44,7 +44,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
     public partial class AssetDatabaseWindow : TrackingNotifyPropertyChangedWindowBase
     {
         #region Declarations
-        public const string dbCurrentBuild = "7.0"; //If changes are made that invalidate old databases edit this.
+        public const string dbCurrentBuild = "7.1"; //If changes are made that invalidate old databases edit this.
         private int previousView { get; set; }
         private int _currentView;
         public int currentView { get => _currentView; set { previousView = _currentView; SetProperty(ref _currentView, value); } }
@@ -63,6 +63,15 @@ namespace LegendaryExplorer.Tools.AssetDatabase
             get => currentGame;
             set => SetProperty(ref currentGame, value);
         }
+
+        private MELocalization _localization = MELocalization.INT;
+        public MELocalization Localization { get => _localization; set => SetProperty(ref _localization, value); }
+
+        public ObservableCollectionExtended<MELocalization> AvailableLocalizations { get; set; } = new()
+        {
+            MELocalization.INT, MELocalization.DEU, MELocalization.FRA, MELocalization.ITA, MELocalization.POL,
+            MELocalization.RUS
+        };
 
         private string CurrentDBPath { get; set; }
         public AssetDB CurrentDataBase { get; } = new();
@@ -200,6 +209,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
         public ICommand OpenInWindowsExplorerCommand { get; set; }
         public ICommand OpenInPlotDBCommand { get; set; }
         public ICommand OpenPEDefinitionCommand { get; set; }
+        public ICommand ChangeLocalizationCommand { get; set; }
         private bool CanCancelDump(object obj)
         {
             return ProcessingQueue != null && ProcessingQueue.Completion.Status == TaskStatus.WaitingForActivation && !DumpCanceled;
@@ -303,6 +313,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
             OpenInWindowsExplorerCommand = new GenericCommand(OpenFileInWindowsExplorer);
             OpenInPlotDBCommand = new GenericCommand(OpenInPlotDB, IsPlotElementSelected);
             OpenPEDefinitionCommand = new GenericCommand(OpenPEDefinitionInToolset, IsPlotElementSelected);
+            ChangeLocalizationCommand = new RelayCommand((e) => { Localization = (MELocalization)e; });
         }
 
         private void AssetDB_Loaded(object sender, RoutedEventArgs e)
@@ -373,6 +384,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
             database.meGame = pdb.meGame;
             database.GenerationDate = pdb.GenerationDate;
             database.DataBaseversion = pdb.DataBaseversion;
+            database.Localization = pdb.Localization;
             database.FileList.AddRange(pdb.FileList);
             database.ContentDir.AddRange(pdb.ContentDir);
             database.AddRecords(pdb);
@@ -494,6 +506,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
         {
             CurrentDataBase.Clear();
             CurrentDataBase.meGame = CurrentGame;
+            CurrentDataBase.Localization = Localization;
 
             FileListExtended.ClearEx();
             CustomFileList.Clear();
@@ -718,6 +731,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
                             FileListExtended.Add(new(fileName, cd, mount));
                         }
 
+                        Localization = CurrentDataBase.Localization;
                         ParseConvos = !CurrentDataBase.Lines.IsEmpty();
                         ParsePlotUsages = CurrentDataBase.PlotUsages.Any();
                         IsBusy = false;
@@ -916,19 +930,17 @@ namespace LegendaryExplorer.Tools.AssetDatabase
         private void OpenSourcePkg(object obj)
         {
             var cr = (ClassRecord)lstbx_Classes.SelectedItem;
-            var sourcepkg = cr.Definition_package;
+            var sourcepkg = cr.DefinitionFile;
             var sourceexp = cr.Definition_UID;
 
-            int sourcedefaultUsage = cr.Usages.FirstOrDefault(u => u.IsDefault)?.FileKey ?? 0;
-
-            if (sourcepkg == null || sourcedefaultUsage == 0)
+            if (sourcepkg < 0)
             {
                 MessageBox.Show("Definition file unknown.");
                 return;
             }
-            var contentdir = FileListExtended[sourcedefaultUsage].Directory;
+            (string filename, string dir, _) = FileListExtended[sourcepkg];
 
-            OpenInToolkit("PackageEditor", GetFilePath(sourcepkg, contentdir), sourceexp);
+            OpenInToolkit("PackageEditor", GetFilePath(filename, dir), sourceexp);
         }
 
         private string GetFilePath(string filename, string contentdir)
@@ -1799,6 +1811,15 @@ namespace LegendaryExplorer.Tools.AssetDatabase
                     if (!showthis)
                     {
                         showthis = tr.ParentPackage.ToLower().Contains(FilterBox.Text.ToLower());
+                    }
+
+                    if (!showthis && FilterBox.Text.ToLower().StartsWith("size: ") && FilterBox.Text.ToLower().Contains("x") && FilterBox.Text.Length > 6)
+                    {
+                        var sr = FilterBox.Text.Remove(0, 6).ToLower().Split("x");
+                        if (int.TryParse(sr[0], out int xVal) && int.TryParse(sr[1], out int yVal))
+                        {
+                            showthis = tr.SizeX == xVal && tr.SizeY == yVal;
+                        }
                     }
                 }
 
@@ -2751,7 +2772,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
 
             AllDumpingItems = new List<SingleFileScanner>();
             CurrentDumpingItems.ClearEx();
-            var scanOptions = new AssetDBScanOptions(scanCRC, ParseConvos, ParsePlotUsages);
+            var scanOptions = new AssetDBScanOptions(scanCRC, ParseConvos, ParsePlotUsages, CurrentDataBase.Localization);
             foreach (var fkey in fileKeys)
             {
                 var threadtask = new SingleFileScanner(fkey.Item2, fkey.Item1, scanOptions);

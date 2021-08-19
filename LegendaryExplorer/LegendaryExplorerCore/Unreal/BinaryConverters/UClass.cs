@@ -17,8 +17,8 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
         public NameReference[] unkNameList1; //ME1, ME2
         public OrderedMultiValueDictionary<NameReference, UIndex> ComponentNameToDefaultObjectMap;
         public OrderedMultiValueDictionary<UIndex, UIndex> Interfaces;
-        public NameReference unkName2;//ME3
-        public uint unk2; //ME3
+        public NameReference unkName2;//ME3, LE
+        public uint unk2; //ME3, LE
         public uint le2ps3me2Unknown; //ME2, PS3 only and LE2
         public NameReference[] unkNameList2;//ME1/ME2
         public UIndex Defaults;
@@ -99,28 +99,6 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             }
 
             return names;
-        }
-
-        /// <summary>
-        /// Rebuilds the compiling chain of children for this class. Items with this entry as the parent will participate in the class.
-        /// </summary>
-        public void UpdateChildrenChain()
-        {
-            var children = Export.FileRef.Exports.Where(x => x.idxLink == Export.UIndex).Reverse().ToList();
-            for (int i = 0; i < children.Count; i++)
-            {
-                var c = children[i];
-                if (ObjectBinary.From(c) is UField uf)
-                {
-                    uf.Next = i == children.Count - 1 ? 0 : children[i + 1];
-                    c.WriteBinary(uf);
-                }
-                else
-                {
-                    Debug.WriteLine($"Can't link non UField {c.InstancedFullPath}");
-                }
-            }
-            Children = children.Any() ? children[0].UIndex : 0;
         }
 
         /// <summary>

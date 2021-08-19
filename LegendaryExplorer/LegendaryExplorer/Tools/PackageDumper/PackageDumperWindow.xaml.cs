@@ -314,7 +314,7 @@ namespace LegendaryExplorer.Tools.PackageDumper
 
                     outputFilename += ".txt";
 
-                    string outfolder = outputfolder ?? GetRelativePath(Path.GetFullPath(item.Key), Directory.GetParent(item.Key).ToString());
+                    string outfolder = outputfolder ?? Directory.GetParent(packageF).ToString();
 
                     var threadtask = new PackageDumperSingleFileTask(packageF, outputFilename, outfolder);
                     AllDumpingItems.Add(threadtask); //For setting cancellation value

@@ -93,6 +93,7 @@
         <MenuItem Header="Dump Shader Types" Click="DumpShaderTypes_OnClick" />
         <MenuItem Header="Compile Compression Stats" Click="CompileCompressionStats_Click" />
         <MenuItem Header="Scan Headers" Click="ScanHeaders_OnCLick" />
+        <MenuItem Header="Calculate Probe Functions" Click="CalculateProbeFuncs_OnClick"/>
     </MenuItem>
     <MenuItem Header="Kinkojiro's 101 ways to cause an aneurysm">
         <MenuItem Header="Transfer game level's art to a different game (ME2 -> ME3 Only)" Click="TransferLevelBetweenGames"/>
@@ -114,7 +115,7 @@
         <MenuItem Header="Generate audio file info JSON (check code for game)" Click="GenerateAudioFileInfo_Click"/>
         <MenuItem Header="Generate Wwise ID from entry name" Click="GenerateWwiseId_Click"/>
         <MenuItem Header="Create test TLK from XML with IDs in string" Click="CreateTestTLKWithStringIDs_Click"/>
-        <MenuItem Header="Update Local Functions and Relink" Click="UpdateLocalFunctions_Click"/>
+        <MenuItem Header="Relink Children Tree and Update Local Functions" ToolTip="Must have UStruct selected (Class, State, Function, Struct, ScriptStruct)" Click="UpdateLocalFunctions_Click"/>
         <MenuItem Header="Dump TOC file" Click="DumpTOC_Click"/>
         <MenuItem Header="Fix LE1 elevator convo" Click="LE1Elevator_Click"/>
         <MenuItem Header="Fix pink visor" Click="FixPinkVisor_Click"/>

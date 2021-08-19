@@ -11,20 +11,16 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
 {
     public class UState : UStruct
     {
-        public uint stateUnk1; //probemask?
-        public uint stateUnk2;
-        public uint stateUnk3;
-        public uint stateUnk4;
+        public EProbeFunctions ProbeMask;
+        public EProbeFunctions IgnoreMask;
         public ushort LabelTableOffset;
         public EStateFlags StateFlags;
         public OrderedMultiValueDictionary<NameReference, UIndex> LocalFunctionMap;
         protected override void Serialize(SerializingContainer2 sc)
         {
             base.Serialize(sc);
-            sc.Serialize(ref stateUnk1);
-            sc.Serialize(ref stateUnk2);
-            sc.Serialize(ref stateUnk3);
-            sc.Serialize(ref stateUnk4);
+            sc.Serialize(ref ProbeMask);
+            sc.Serialize(ref IgnoreMask);
             sc.Serialize(ref LabelTableOffset);
             sc.Serialize(ref StateFlags);
             sc.Serialize(ref LocalFunctionMap, SCExt.Serialize, SCExt.Serialize);
@@ -63,6 +59,17 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             else
             {
                 sc.ms.Writer.WriteUInt32((uint)flags);
+            }
+        }
+        public static void Serialize(this SerializingContainer2 sc, ref EProbeFunctions flags)
+        {
+            if (sc.IsLoading)
+            {
+                flags = (EProbeFunctions)sc.ms.ReadUInt64();
+            }
+            else
+            {
+                sc.ms.Writer.WriteUInt64((ulong)flags);
             }
         }
     }

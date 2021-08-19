@@ -37,20 +37,26 @@ namespace LegendaryExplorer.Tools.AssetDatabase.Scanners
                     if (db.GeneratedClasses.TryGetValue(e.ClassName, out var oldVal))
                     {
                         oldVal.Usages.Add(classUsage);
-                        oldVal.PropertyRecords.AddRange(pList);
+                        foreach (var p in pList)
+                        {
+                            oldVal.PropertyRecords.TryAdd(p.Property, p);
+                        }
                     }
                     else
                     {
                         var newVal = new ClassRecord { Class = e.ClassName, IsModOnly = e.IsMod };
                         newVal.Usages.Add(classUsage);
-                        newVal.PropertyRecords.AddRange(pList);
+                        foreach (var p in pList)
+                        {
+                            newVal.PropertyRecords.TryAdd(p.Property, p);
+                        }
                         db.GeneratedClasses[e.ClassName] = newVal;
                     }
                 }
             }
             else
             {
-                var newClassRecord = new ClassRecord(e.Export.ObjectName, Path.GetFileNameWithoutExtension(e.FileName), e.Export.UIndex, e.Export.SuperClassName) { IsModOnly = e.IsMod };
+                var newClassRecord = new ClassRecord(e.Export.ObjectName, e.FileKey, e.Export.UIndex, e.Export.SuperClassName) { IsModOnly = e.IsMod };
                 var classUsage = new ClassUsage(e.FileKey, e.Export.UIndex, false, e.IsMod);
                 var objectNameInstanced = e.ObjectNameInstanced;
 
@@ -58,7 +64,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase.Scanners
                 {
                     if (db.GeneratedClasses.TryGetValue(objectNameInstanced, out ClassRecord oldVal))
                     {
-                        if (oldVal.Definition_package is null) //fake classrecord, created when a usage was found
+                        if (oldVal.DefinitionFile < 0) //fake classrecord, created when a usage was found
                         {
                             newClassRecord.Usages.AddRange(oldVal.Usages);
                             newClassRecord.Usages.Add(classUsage);
