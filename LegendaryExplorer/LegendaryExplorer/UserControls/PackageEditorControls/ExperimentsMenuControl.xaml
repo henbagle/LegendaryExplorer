@@ -119,5 +119,6 @@
         <MenuItem Header="Dump TOC file" Click="DumpTOC_Click"/>
         <MenuItem Header="Fix LE1 elevator convo" Click="LE1Elevator_Click"/>
         <MenuItem Header="Fix pink visor" Click="FixPinkVisor_Click"/>
+        <MenuItem Header="Make localized GlobalTLK for LE1CP" Click="MakeLocalizedTLK_Click"/>
     </MenuItem>
 </MenuItem>

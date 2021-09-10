@@ -1136,6 +1136,10 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsO.FixPinkVisor(GetPEWindow());
         }
+        private void MakeLocalizedTLK_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsO.MakeLocalizedTLK(GetPEWindow());
+        }
         #endregion
 
 

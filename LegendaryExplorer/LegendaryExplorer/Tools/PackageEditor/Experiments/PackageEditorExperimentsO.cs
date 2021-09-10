@@ -9,6 +9,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
+using System.Xml;
 using LegendaryExplorer.Misc;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.GameFilesystem;
@@ -582,6 +583,72 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 matInstanceConstant.WriteProperties(matProps);
                 pcc.Save();
             }
+        }
+
+        public static void MakeLocalizedTLK(PackageEditorWindow pew = null)
+        {
+            var locales = new Dictionary<string, string>();
+            locales.Add("Startup_DE.pcc", "DLC_MOD_LE1CP_GlobalTlk_DE.pcc");
+            locales.Add("Startup_ES.pcc", "DLC_MOD_LE1CP_GlobalTlk_ES.pcc");
+            locales.Add("Startup_FR.pcc", "DLC_MOD_LE1CP_GlobalTlk_FR.pcc");
+            locales.Add("Startup_IT.pcc", "DLC_MOD_LE1CP_GlobalTlk_IT.pcc");
+            locales.Add("Startup_JA.pcc", "DLC_MOD_LE1CP_GlobalTlk_JPN.pcc");
+            locales.Add("Startup_PLPC.pcc", "DLC_MOD_LE1CP_GlobalTlk_PLPC.pcc");
+            locales.Add("Startup_RA.pcc", "DLC_MOD_LE1CP_GlobalTlk_RA.pcc");
+
+            string mod =
+                @"D:\Mass Effect Modding\ME3TweaksModManager\mods\LE1\LE1 Community Patch\DLC_MOD_LE1CP\CookedPCConsole";
+
+            string xmlFilePath = @"D:\Mass Effect Modding\My Mods\LE1_CP\localized.xml";
+
+            var xmlDoc = new XmlDocument();
+            var stringIds = new List<int>();
+            xmlDoc.Load(xmlFilePath);
+            var children = xmlDoc.DocumentElement?.ChildNodes;
+            foreach (XmlNode c in children)
+            {
+                var strid = c.FirstChild?.InnerText;
+                if (int.TryParse(strid, out int id))
+                {
+                    stringIds.Add(id);
+                }
+            }
+
+            foreach (var kvp in locales)
+            {
+                using IMEPackage startup =
+                    MEPackageHandler.OpenMEPackage(Path.Combine(LE1Directory.CookedPCPath, kvp.Key));
+                using IMEPackage global =
+                    MEPackageHandler.OpenMEPackage(Path.Combine(mod, kvp.Value));
+
+                var startupF = new ME1TalkFile((ExportEntry)startup.GetEntry(3));
+                var startupM = new ME1TalkFile((ExportEntry)startup.GetEntry(4));
+
+                var globalF = (ExportEntry)global.GetEntry(1);
+                var stringsF = new List<ME1TalkFile.TLKStringRef>();
+                var globalM = (ExportEntry)global.GetEntry(2);
+                var stringsM = new List<ME1TalkFile.TLKStringRef>();
+
+                foreach (var id in stringIds)
+                {
+                    if (id >= 200000) continue;
+                    var fStr = startupF.findDataById(id);
+                    var mStr = startupM.findDataById(id);
+                    stringsF.Add(new ME1TalkFile.TLKStringRef(id, 1, fStr));
+                    stringsM.Add(new ME1TalkFile.TLKStringRef(id, 1, mStr));
+                }
+
+                HuffmanCompression hcf = new HuffmanCompression();
+                HuffmanCompression hcm = new HuffmanCompression();
+
+                hcf.LoadInputData(stringsF);
+                hcm.LoadInputData(stringsM);
+                hcf.serializeTalkfileToExport(globalF);
+                hcm.serializeTalkfileToExport(globalM);
+                global.Save();
+            }
+
+
         }
     }
 }
