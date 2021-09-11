@@ -634,6 +634,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                     if (id >= 200000) continue;
                     var fStr = startupF.findDataById(id);
                     var mStr = startupM.findDataById(id);
+                    fStr = fStr.Substring(1, fStr.Length - 2);
+                    mStr = mStr.Substring(1, mStr.Length - 2);
                     stringsF.Add(new ME1TalkFile.TLKStringRef(id, 1, fStr));
                     stringsM.Add(new ME1TalkFile.TLKStringRef(id, 1, mStr));
                 }
