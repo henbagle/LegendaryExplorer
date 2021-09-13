@@ -551,36 +551,44 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 .EnumerateFiles("*", SearchOption.AllDirectories)
                 .Where(f => f.Extension.ToLower() == ".pcc")
                 .ToArray();
+
+            var colors = new Dictionary<float, float[]>();
+            colors.Add(0.20784314f, new[] {0.12941177f, 0.13725491f, 0.16078432f, 1f}); // grey/corpsec
+            colors.Add(0.003921569f, new[] {0.023529412f, 0.039215688f, 0.019607844f, 1f}); // green/cerberus
+            colors.Add(0.32156864f, new[] {0.6f, 0.5294118f, 0.33333334f, 1f}); // cream
+            colors.Add(0.050980393f, new[] {0.039215688f, 0.039215688f, 0.019607844f, 1f}); // camo
+
+
             foreach (var file in files)
             {
                 using var pcc = MEPackageHandler.OpenMEPackage(file.FullName);
-                var matInstanceConstant = pcc.FindExport("BIOG_HMM_HGR_HVY_R.BRT.HMM_BRT_HVYa_MAT_1a");
-                if (matInstanceConstant is null) break;
-                var matProps = matInstanceConstant.GetProperties();
-                var vectors = matProps.GetProp<ArrayProperty<StructProperty>>("VectorParameterValues");
-                foreach (var structProp in vectors.Values)
+                var matInstanceConstants = pcc.Exports.Where((e) => e.ClassName=="MaterialInstanceConstant" && e.ObjectName.ToString().StartsWith("HMM_BRT_HVYa_MAT"));
+                foreach (var matInstanceConstant in matInstanceConstants)
                 {
-                    if (structProp.GetProp<NameProperty>("ParameterName").Value == "HGR_Colour_01")
+                    var matProps = matInstanceConstant.GetProperties();
+                    var vectors = matProps.GetProp<ArrayProperty<StructProperty>>("VectorParameterValues");
+                    foreach (var structProp in vectors.Values)
                     {
-                        var linearColor = structProp.Properties.GetProp<StructProperty>("ParameterValue");
-                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.20784314f, "R"));
-                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.24705882f, "G"));
-                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.27058825f, "B"));
-                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0f, "A"));
-                        structProp.Properties.AddOrReplaceProp(linearColor);
+                        if (structProp.GetProp<NameProperty>("ParameterName").Value == "HGR_Colour_01")
+                        {
+                            var linearColor = structProp.Properties.GetProp<StructProperty>("ParameterValue");
+
+                            var oldR = linearColor.Properties.GetProp<FloatProperty>("R").Value;
+                            float key = colors.Keys.FirstOrDefault(f => Math.Abs(f - oldR) < 0.0001);
+                            if (colors.TryGetValue(key, out var newColors))
+                            {
+                                linearColor.Properties.AddOrReplaceProp(new FloatProperty(newColors[0], "R"));
+                                linearColor.Properties.AddOrReplaceProp(new FloatProperty(newColors[1], "G"));
+                                linearColor.Properties.AddOrReplaceProp(new FloatProperty(newColors[2], "B"));
+                                linearColor.Properties.AddOrReplaceProp(new FloatProperty(newColors[3], "A"));
+                                structProp.Properties.AddOrReplaceProp(linearColor);
+                            }
+
+                        }
                     }
-                    else if (structProp.GetProp<NameProperty>("ParameterName").Value == "HGR_Colour_02")
-                    {
-                        var linearColor = structProp.Properties.GetProp<StructProperty>("ParameterValue");
-                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.05882353f, "R"));
-                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.07058824f, "G"));
-                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0.08235294f, "B"));
-                        linearColor.Properties.AddOrReplaceProp(new FloatProperty(0f, "A"));
-                        structProp.Properties.AddOrReplaceProp(linearColor);
-                    }
+                    matProps.AddOrReplaceProp(vectors);
+                    matInstanceConstant.WriteProperties(matProps);
                 }
-                matProps.AddOrReplaceProp(vectors);
-                matInstanceConstant.WriteProperties(matProps);
                 pcc.Save();
             }
         }
