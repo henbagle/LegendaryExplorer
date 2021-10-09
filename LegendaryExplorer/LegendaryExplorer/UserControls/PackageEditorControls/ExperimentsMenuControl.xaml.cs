@@ -1221,6 +1221,11 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
             PackageEditorExperimentsH.DumpTOC();
         }
 
+        private void CopyDecalActors_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.CopyDecalActors(GetPEWindow());
+        }
+
         #endregion
 
         // EXPERIMENTS: OTHER PEOPLE ------------------------------------------------------------

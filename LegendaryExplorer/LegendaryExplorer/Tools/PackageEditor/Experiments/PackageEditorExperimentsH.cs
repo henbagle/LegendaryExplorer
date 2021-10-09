@@ -6,11 +6,13 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
+using LegendaryExplorer.Dialogs;
 using LegendaryExplorer.Misc;
 using LegendaryExplorerCore.GameFilesystem;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Misc;
 using LegendaryExplorerCore.Packages;
+using LegendaryExplorerCore.Packages.CloningImportingAndRelinking;
 using LegendaryExplorerCore.TLK.ME1;
 using LegendaryExplorerCore.Unreal;
 using LegendaryExplorerCore.Unreal.BinaryConverters;
@@ -233,6 +235,82 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
             var toc = new TOCBinFile(inputFile);
             toc.DumpTOCToTxtFile(outputFile);
+        }
+
+        public static void CopyDecalActors(PackageEditorWindow getPeWindow)
+        {
+            Microsoft.Win32.OpenFileDialog outputFileDialog = new () {
+                Title = "Select file to copy DecalActors to",
+                Filter = "*.pcc|*.pcc" };
+            bool? result = outputFileDialog.ShowDialog();
+            if (!result.HasValue || !result.Value)
+            {
+                Debug.WriteLine("No output file specified");
+                return;
+            }
+            string outputFilePath = outputFileDialog.FileName;
+            int smcSourceUindex = 0;
+            if (PromptDialog.Prompt(null, "Enter Source StaticMeshComponent UIndex") is string smcSourceStr)
+            {
+                if (string.IsNullOrEmpty(smcSourceStr) || !int.TryParse(smcSourceStr, out var smcSrcId))
+                {
+                    MessageBox.Show("Wrong", "Warning", MessageBoxButton.OK);
+                    return;
+                }
+                smcSourceUindex = smcSrcId;
+            }
+            int smcTargetUindex = 0;
+            if (PromptDialog.Prompt(null, "Enter Target StaticMeshComponent UIndex") is string smcTargetStr)
+            {
+                if (string.IsNullOrEmpty(smcTargetStr) || !int.TryParse(smcTargetStr, out var smcTgtId))
+                {
+                    MessageBox.Show("Wrong", "Warning", MessageBoxButton.OK);
+                    return;
+                }
+                smcTargetUindex = smcTgtId;
+            }
+
+            using IMEPackage o = MEPackageHandler.OpenMEPackage(outputFilePath);
+            IEntry smaTarget = o.GetEntry(smcTargetUindex).Parent;
+
+            foreach (var decalComponent in getPeWindow.Pcc.Exports.Where(c => c.ClassName == "DecalComponent"))
+            {
+                // Check this DecalComponent contains the decal we're looking for, if not continue
+                var receivers = decalComponent.GetProperty<ArrayProperty<StructProperty>>("DecalReceivers")?.Values ?? new List<StructProperty>();
+                if (receivers.All(property => property.GetPropOrDefault<ObjectProperty>("Component").Value != smcSourceUindex)) continue;
+
+                // Bad hack because the reindexer isn't working - don't do this
+                decalComponent.Parent.ObjectName = new NameReference(decalComponent.Parent.ObjectName.Name,
+                    decalComponent.Parent.ObjectName.Number + 300);
+
+                // Import the Decal tree into the new file
+                EntryImporter.ImportAndRelinkEntries(EntryImporter.PortingOption.CloneTreeAsChild, decalComponent.Parent, o,
+                    o.FindEntry("TheWorld.PersistentLevel"), true, out IEntry clonedDecalEntry);
+                ExportEntry newDecalComponent = clonedDecalEntry.GetChildren().FirstOrDefault(e => e.ClassName == "DecalComponent") as ExportEntry;
+                o.AddToLevelActorsIfNotThere(decalComponent.Parent as ExportEntry);
+
+                // Add the DecalReceivers property with our target SMC
+                var props = newDecalComponent.GetProperties();
+                props.AddOrReplaceProp(new ArrayProperty<StructProperty>(new List<StructProperty>()
+                {
+                    new StructProperty("DecalReceiver", false, new ObjectProperty(smcTargetUindex, "Component"))
+                }, "DecalReceivers"));
+
+                // Add the Filter array with our SMA, and set the filter mode
+                props.AddOrReplaceProp(new ArrayProperty<ObjectProperty>( new List<ObjectProperty>()
+                {
+                    new ObjectProperty(smaTarget.UIndex)
+                }, "Filter"));
+                props.AddOrReplaceProp(new EnumProperty("FM_Affect", "EFilterMode", MEGame.LE1, "FilterMode"));
+
+                // Remove the other static receivers from the binary
+                var binary = ObjectBinary.From<DecalComponent>(newDecalComponent);
+                var targetStaticReceiver =
+                    binary.StaticReceivers.FirstOrDefault(t => t.PrimitiveComponent == smcSourceUindex);
+                if(targetStaticReceiver is not null) targetStaticReceiver.PrimitiveComponent = smcTargetUindex;
+                binary.StaticReceivers = targetStaticReceiver is null ? new StaticReceiverData[] { } : new[] {targetStaticReceiver};
+                newDecalComponent.WritePropertiesAndBinary(props, binary);
+            }
         }
     }
 }
