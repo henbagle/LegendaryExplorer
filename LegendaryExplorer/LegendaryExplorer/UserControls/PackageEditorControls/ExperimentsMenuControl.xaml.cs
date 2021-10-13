@@ -1140,6 +1140,10 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsO.MakeLocalizedTLK(GetPEWindow());
         }
+        private void FindUncapitalizedText_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsO.FindUncapitalizedTargetText(GetPEWindow());
+        }
         #endregion
 
 

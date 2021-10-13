@@ -4,6 +4,7 @@ using System.Configuration;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Globalization;
 using System.Threading.Tasks;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -13,6 +14,8 @@ using System.Xml;
 using LegendaryExplorer.Misc;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.GameFilesystem;
+using LegendaryExplorerCore.Gammtek.Extensions;
+using LegendaryExplorerCore.Kismet;
 using LegendaryExplorerCore.Misc;
 using LegendaryExplorerCore.Packages;
 using LegendaryExplorerCore.TLK.ME1;
@@ -78,8 +81,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         {
             StreamWriter Writer = new StreamWriter(Filename, true);
 
-            Vector3 Rotator = new Vector3((float)Math.Atan2(m.M32, m.M33), (float)Math.Asin(-1 * m.M31),
-                (float)Math.Atan2(-1 * m.M21, m.M11));
+            Vector3 Rotator = new Vector3((float) Math.Atan2(m.M32, m.M33), (float) Math.Asin(-1 * m.M31),
+                (float) Math.Atan2(-1 * m.M21, m.M11));
             float RotatorX = Rotator.X;
             RotatorX = RadianToDegrees(RotatorX);
             float RotatorY = Rotator.Y;
@@ -139,8 +142,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         {
             StreamWriter Writer = new StreamWriter(Filename, true);
 
-            Vector3 Rotator = new Vector3((float)Math.Atan2(m.M32, m.M33), (float)Math.Asin(-1 * m.M31),
-                (float)Math.Atan2(-1 * m.M21, m.M11));
+            Vector3 Rotator = new Vector3((float) Math.Atan2(m.M32, m.M33), (float) Math.Asin(-1 * m.M31),
+                (float) Math.Atan2(-1 * m.M21, m.M11));
             float RotatorX = Rotator.X;
             RotatorX = RadianToUnrealDegrees(RotatorX);
             float RotatorY = Rotator.Y;
@@ -214,8 +217,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         {
             StreamWriter Writer = new StreamWriter(Filename, true);
 
-            Vector3 Rotator = new Vector3((float)Math.Atan2(m.M32, m.M33), (float)Math.Asin(-1 * m.M31),
-                (float)Math.Atan2(-1 * m.M21, m.M11));
+            Vector3 Rotator = new Vector3((float) Math.Atan2(m.M32, m.M33), (float) Math.Asin(-1 * m.M31),
+                (float) Math.Atan2(-1 * m.M21, m.M11));
             float RotatorX = Rotator.X;
             RotatorX = RadianToDegrees(RotatorX);
             float RotatorY = Rotator.Y;
@@ -286,7 +289,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             string searchDir = ME1Directory.CookedPCPath;
 
             CommonOpenFileDialog d = new CommonOpenFileDialog
-                { Title = "Select folder to search", IsFolderPicker = true, InitialDirectory = myBasePath };
+                {Title = "Select folder to search", IsFolderPicker = true, InitialDirectory = myBasePath};
             if (d.ShowDialog() == CommonFileDialogResult.Ok)
             {
                 searchDir = d.FileName;
@@ -306,7 +309,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
             string outputFilePath = outputFileDialog.FileName;
 
-            string[] extensions = { ".u", ".upk" };
+            string[] extensions = {".u", ".upk"};
 
             pew.IsBusy = true;
 
@@ -482,6 +485,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 {
                     uClass.UpdateLocalFunctions();
                 }
+
                 export.WriteBinary(uStruct);
             }
         }
@@ -540,13 +544,13 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         {
             string searchDir = ME1Directory.DLCPath;
             CommonOpenFileDialog d = new CommonOpenFileDialog
-                { Title = "Select folder to search", IsFolderPicker = true };
+                {Title = "Select folder to search", IsFolderPicker = true};
             if (d.ShowDialog() == CommonFileDialogResult.Ok)
             {
                 searchDir = d.FileName;
             }
             else return;
-            
+
             FileInfo[] files = new DirectoryInfo(searchDir)
                 .EnumerateFiles("*", SearchOption.AllDirectories)
                 .Where(f => f.Extension.ToLower() == ".pcc")
@@ -562,7 +566,9 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             foreach (var file in files)
             {
                 using var pcc = MEPackageHandler.OpenMEPackage(file.FullName);
-                var matInstanceConstants = pcc.Exports.Where((e) => e.ClassName=="MaterialInstanceConstant" && e.ObjectName.ToString().StartsWith("HMM_BRT_HVYa_MAT"));
+                var matInstanceConstants = pcc.Exports.Where((e) =>
+                    e.ClassName == "MaterialInstanceConstant" &&
+                    e.ObjectName.ToString().StartsWith("HMM_BRT_HVYa_MAT"));
                 foreach (var matInstanceConstant in matInstanceConstants)
                 {
                     var matProps = matInstanceConstant.GetProperties();
@@ -586,9 +592,11 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
                         }
                     }
+
                     matProps.AddOrReplaceProp(vectors);
                     matInstanceConstant.WriteProperties(matProps);
                 }
+
                 pcc.Save();
             }
         }
@@ -629,12 +637,12 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 using IMEPackage global =
                     MEPackageHandler.OpenMEPackage(Path.Combine(mod, kvp.Value));
 
-                var startupF = new ME1TalkFile((ExportEntry)startup.GetEntry(3));
-                var startupM = new ME1TalkFile((ExportEntry)startup.GetEntry(4));
+                var startupF = new ME1TalkFile((ExportEntry) startup.GetEntry(3));
+                var startupM = new ME1TalkFile((ExportEntry) startup.GetEntry(4));
 
-                var globalF = (ExportEntry)global.GetEntry(1);
+                var globalF = (ExportEntry) global.GetEntry(1);
                 var stringsF = new List<ME1TalkFile.TLKStringRef>();
-                var globalM = (ExportEntry)global.GetEntry(2);
+                var globalM = (ExportEntry) global.GetEntry(2);
                 var stringsM = new List<ME1TalkFile.TLKStringRef>();
 
                 foreach (var id in stringIds)
@@ -659,6 +667,89 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             }
 
 
+        }
+
+        public static void FindUncapitalizedTargetText(PackageEditorWindow pew = null)
+        {
+            pew.IsBusy = true;
+            var i = 1;
+            Dictionary<int, string> badOnes = new();
+            Task.Run(() =>
+            {
+                string searchDir = LE1Directory.CookedPCPath;
+                FileInfo[] files = new DirectoryInfo(searchDir)
+                    .EnumerateFiles("*", SearchOption.AllDirectories)
+                    .Where(f => f.Extension.ToLower() == ".pcc")
+                    .ToArray();
+
+                void AddToBadOnes(int strRef)
+                {
+                    string str = TlkManagerNS.TLKManagerWPF.GlobalFindStrRefbyID(strRef, MEGame.LE1);
+                    if (strRef != 0 && str is not null && str != "No Data")
+                    {
+                        if (str.Split(" ").Any(w => w[0] != w.ToUpperInvariant()[0]))
+                        {
+                            badOnes.TryAdd(strRef, str);
+                        }
+                    }
+                }
+                foreach (var file in files)
+                {
+                    using var pcc = MEPackageHandler.OpenMEPackage(file.FullName);
+                    pew.BusyText = $"[{i}/{files.Length}] Scanning Packages for capitalized text";
+                    HashSet<string> classes = new HashSet<string>()
+                    {
+                        "BioArtPlaceableInertType", "BioArtPlaceableUseableType", "BioArtPlaceableBehavior",
+                        "BioSeqAct_ModifyPropertyPawn", "BioSeqAct_ModifyPropertyArtPlaceable"
+                    };
+                    var potentialExports = pcc.Exports.Where(e => classes.Contains(e.ClassName));
+                    foreach (var export in potentialExports)
+                    {
+                        int targetTipStrRef = 0;
+                        string targetTip = null;
+                        if (export.GetProperty<StringRefProperty>("m_nTargetTipTextOverridden") is { } prop)
+                        {
+                            AddToBadOnes(prop.Value);
+                        }
+                        else if (export.GetProperty<StringRefProperty>("m_nTargetTipText") is { } prop2)
+                        {
+                            AddToBadOnes(prop2.Value);
+                        }
+                        else if (export.GetProperty<StringRefProperty>("ActorGameNameStrRef") is { } prop3)
+                        {
+                            AddToBadOnes(prop3.Value);
+                        }
+                        else if (export.ClassName == "BioSeqAct_ModifyPropertyPawn" || export.ClassName == "BioSeqAct_ModifyPropertyArtPlaceable")
+                        {
+                            var variableLinks = SeqTools.GetVariableLinksOfNode(export);
+                            var link = variableLinks.FirstOrDefault(e => e.LinkDesc == "m_nTargetTipTextOverridden");
+                            if (link is not null)
+                            {
+                                var tgtOverride = ((ExportEntry) link.LinkedNodes[0]).GetProperty<StringRefProperty>("m_srValue")?.Value ?? 0;
+                                AddToBadOnes(tgtOverride);
+                            }
+
+                            link = variableLinks.FirstOrDefault(e => e.LinkDesc == "ActorGameNameStrRef");
+                            if (link is not null)
+                            {
+                                var tgtOverride = ((ExportEntry) link.LinkedNodes[0]).GetProperty<StringRefProperty>("m_srValue")?.Value ?? 0;
+                                AddToBadOnes(tgtOverride);
+                            }
+                        }
+                    }
+                    i++;
+                }
+
+                using StreamWriter outputFile = new(@"D:\Mass Effect Modding\My Mods\LE1 Community Patch\TextFix.txt");
+                foreach (var kvp in badOnes)
+                {
+                    outputFile.WriteLine($"{kvp.Key}: {kvp.Value}");
+                }
+            }).ContinueWithOnUIThread(_ =>
+            {
+                pew.IsBusy = false;
+                pew.BusyText = $"Done.";
+            });
         }
     }
 }
