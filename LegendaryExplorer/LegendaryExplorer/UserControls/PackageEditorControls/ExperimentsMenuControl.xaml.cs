@@ -6,9 +6,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using LegendaryExplorer.Dialogs;
 using LegendaryExplorer.Misc;
+using LegendaryExplorer.SharedUI;
 using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorer.Tools.PackageEditor.Experiments;
 using LegendaryExplorerCore.GameFilesystem;
@@ -35,8 +37,53 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
     {
         public ExperimentsMenuControl()
         {
+            LoadCommands();
             InitializeComponent();
         }
+
+        public ICommand ForceReloadPackageCommand { get; set; }
+
+
+        private void LoadCommands()
+        {
+            ForceReloadPackageCommand = new GenericCommand(ForceReloadPackageWithoutSharing, CanForceReload);
+        }
+
+        private static bool warnedOfReload = false;
+
+        /// <summary>
+        /// Forcibly reloads the package from disk. The package loaded in this instance will no longer be shared.
+        /// </summary>
+        internal void ForceReloadPackageWithoutSharing()
+        {
+            var peWindow = GetPEWindow();
+            var fileOnDisk = peWindow.Pcc.FilePath;
+            if (fileOnDisk != null && File.Exists(fileOnDisk))
+            {
+                if (peWindow.Pcc.IsModified)
+                {
+                    var warningResult = MessageBox.Show(GetPEWindow(), "The current package is modified. Reloading the package will cause you to lose all changes to this package.\n\nReload anyways?", "Warning", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                    if (warningResult != MessageBoxResult.Yes)
+                        return; // Do not continue!
+                }
+
+                if (!warnedOfReload)
+                {
+                    var warningResult = MessageBox.Show(GetPEWindow(), "Forcibly reloading a package will drop it out of tool sharing - making changes to this package in other will not be reflected in this window, and changes to this window will not be reflected in other windows. THIS MEANS SAVING WILL OVERWRITE CHANGES FROM OTHER WINDOWS. Only continue if you know what you are doing.\n\nReload anyways?", "Warning", MessageBoxButton.YesNo, MessageBoxImage.Error);
+                    if (warningResult != MessageBoxResult.Yes)
+                        return; // Do not continue!
+                    warnedOfReload = true;
+                }
+
+                peWindow.GetSelected(out var selectedIndex);
+                using var fStream = File.OpenRead(fileOnDisk);
+                peWindow.LoadFileFromStream(fStream, fileOnDisk, selectedIndex);
+                peWindow.Title += " (NOT SHARED WITH OTHER WINDOWS)";
+            }
+        }
+
+        internal bool CanForceReload() => GetPEWindow()?.Pcc != null;
+
 
         public PackageEditorWindow GetPEWindow()
         {
@@ -182,6 +229,49 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
             Task.Run(() =>
             {
                 sw.Start();
+                LE1UnrealObjectInfo.generateInfo(Path.Combine(AppDirectories.ExecFolder, "LE1ObjectInfo.json"), true, setProgress);
+                currentGame = MEGame.LE2;
+                LE2UnrealObjectInfo.generateInfo(Path.Combine(AppDirectories.ExecFolder, "LE2ObjectInfo.json"), true, setProgress);
+                currentGame = MEGame.LE3;
+                LE3UnrealObjectInfo.generateInfo(Path.Combine(AppDirectories.ExecFolder, "LE3ObjectInfo.json"), true, setProgress);
+                sw.Stop();
+            }).ContinueWithOnUIThread(x =>
+            {
+                pew.IsBusy = false;
+                pew.RestoreAndBringToFront();
+                MessageBox.Show(GetPEWindow(), $"Done. Took {sw.Elapsed.TotalSeconds} seconds");
+            });
+
+
+
+
+        }
+
+        private void BuildAllObjectInfo_Clicked(object sender, RoutedEventArgs e)
+        {
+            var pew = GetPEWindow();
+            pew.BusyText = "Building Object Info";
+            pew.IsBusy = true;
+
+            var currentGame = MEGame.ME1;
+            void setProgress(int done, int total)
+            {
+                Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    pew.BusyText = $"Building {currentGame} Object Info [{done}/{total}]";
+                });
+            }
+            var sw = new Stopwatch();
+
+            Task.Run(() =>
+            {
+                sw.Start();
+                ME1UnrealObjectInfo.generateInfo(Path.Combine(AppDirectories.ExecFolder, "ME1ObjectInfo.json"), true, setProgress);
+                currentGame = MEGame.ME2;
+                ME2UnrealObjectInfo.generateInfo(Path.Combine(AppDirectories.ExecFolder, "ME2ObjectInfo.json"), true, setProgress);
+                currentGame = MEGame.ME3;
+                ME3UnrealObjectInfo.generateInfo(Path.Combine(AppDirectories.ExecFolder, "ME3ObjectInfo.json"), true, setProgress);
+                currentGame = MEGame.LE1;
                 LE1UnrealObjectInfo.generateInfo(Path.Combine(AppDirectories.ExecFolder, "LE1ObjectInfo.json"), true, setProgress);
                 currentGame = MEGame.LE2;
                 LE2UnrealObjectInfo.generateInfo(Path.Combine(AppDirectories.ExecFolder, "LE2ObjectInfo.json"), true, setProgress);
@@ -365,6 +455,12 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsM.UpdateTexturesMatsToGame(GetPEWindow());
         }
+
+        private async void ForceVignetteOff_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsM.OverrideVignettes(GetPEWindow());
+        }
+
 
         private async void SavePackageUnCompressed_Click(object sender, RoutedEventArgs e)
         {
@@ -883,28 +979,7 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
 
         private void RecompileAll_OnClick(object sender, RoutedEventArgs e)
         {
-            var pew = GetPEWindow();
-            if (pew.Pcc != null && pew.Pcc.Platform == MEPackage.GamePlatform.PC && pew.Pcc.Game != MEGame.UDK)
-            {
-                var exportsWithDecompilationErrors = new List<EntryStringPair>();
-                var fileLib = new FileLib(GetPEWindow().Pcc);
-                foreach (ExportEntry export in pew.Pcc.Exports.Where(exp => exp.IsClass))
-                {
-                    (_, string script) = UnrealScriptCompiler.DecompileExport(export, fileLib);
-                    (ASTNode ast, MessageLog log, _) = UnrealScriptCompiler.CompileAST(script, export.ClassName, export.Game);
-                    if (ast == null)
-                    {
-                        exportsWithDecompilationErrors.Add(new EntryStringPair(export, "Compilation Error!"));
-                        break;
-                    }
-                }
-
-                var dlg = new ListDialog(exportsWithDecompilationErrors, $"Compilation errors", "", GetPEWindow())
-                {
-                    DoubleClickEntryHandler = pew.GetEntryDoubleClickAction()
-                };
-                dlg.Show();
-            }
+            PackageEditorExperimentsS.RecompileAll(GetPEWindow());
         }
 
         private void FindOpCode_OnClick(object sender, RoutedEventArgs e)
@@ -955,6 +1030,10 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsS.ScanPackageHeader(GetPEWindow());
         }
+        private void PortShadowMaps_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsS.PortShadowMaps(GetPEWindow());
+        }
         #endregion
 
         // EXPERIMENTS: KINKOJIRO ------------------------------------------------------------
@@ -987,7 +1066,10 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
                     }
                     else if (childbin is UProperty propbin)
                     {
-
+                        if(childbin is UArrayProperty arraybin)
+                        {
+                            EnumerateChildNetIndexes(arraybin.ElementType);
+                        }
                         EnumerateChildNetIndexes(propbin.Next);
                     }
                 }
@@ -1084,6 +1166,79 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsK.AddAllAssetsToReferencer(GetPEWindow());
         }
+
+        private void ClassUpgrade(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsK.ChangeClassesGlobally(GetPEWindow());
+        }
+        
+        private void BlowMeUp(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsK.ShaderDestroyer(GetPEWindow());
+        }
+
+        private void AddGrpsToInterpData(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsK.AddNewInterpGroups(GetPEWindow());
+        }
+        #endregion
+
+        // EXPERIMENTS: HENBAGLE ------------------------------------------------------------
+        #region HenBagle's Experiments
+
+        private void BuildME1SuperTLK_Clicked(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.BuildME1SuperTLKFile(GetPEWindow());
+        }
+
+        private void AssociateAllExtensions_Clicked(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.AssociateAllExtensions();
+        }
+
+        private void GenerateAudioFileInfo_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.CreateAudioSizeInfo(GetPEWindow(), MEGame.LE3);
+        }
+
+        private void GenerateWwiseId_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.GenerateWwiseId(GetPEWindow());
+        }
+
+        private void CreateTestTLKWithStringIDs_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.CreateTestTLKWithStringIDs(GetPEWindow());
+        }
+
+        private void UpdateLocalFunctions_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.UpdateLocalFunctions(GetPEWindow());
+        }
+
+        private void DumpTOC_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.DumpTOC();
+        }
+
+        private void LE1Elevator_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.LE1Elevator(GetPEWindow());
+        }
+
+        private void FixPinkVisor_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.FixPinkVisor(GetPEWindow());
+        }
+        private void MakeLocalizedTLK_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.MakeLocalizedTLK(GetPEWindow());
+        }
+        private void FindUncapitalizedText_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.FindUncapitalizedTargetText(GetPEWindow());
+        }
+
         #endregion
 
         // EXPERIMENTS: OTHER PEOPLE ------------------------------------------------------------
@@ -1093,56 +1248,29 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
             PackageEditorExperimentsO.DumpPackageToT3D(GetPEWindow().Pcc);
         }
 
-        private void BuildME1SuperTLK_Clicked(object sender, RoutedEventArgs e)
+        private void AddPresetDirectorGroup_Click(object sender, RoutedEventArgs e)
         {
-            PackageEditorExperimentsO.BuildME1SuperTLKFile(GetPEWindow());
+            PackageEditorExperimentsO.AddPresetGroup("Director", GetPEWindow());
         }
 
-        private void AssociateAllExtensions_Clicked(object sender, RoutedEventArgs e)
+        private void AddPresetCameraGroup_Click(object sender, RoutedEventArgs e)
         {
-            PackageEditorExperimentsO.AssociateAllExtensions();
+            PackageEditorExperimentsO.AddPresetGroup("Camera", GetPEWindow());
         }
 
-        private void GenerateAudioFileInfo_Click(object sender, RoutedEventArgs e)
+        private void AddPresetActorGroup_Click(object sender, RoutedEventArgs e)
         {
-            PackageEditorExperimentsO.CreateAudioSizeInfo(GetPEWindow(), MEGame.LE3);
+            PackageEditorExperimentsO.AddPresetGroup("Actor", GetPEWindow());
         }
 
-        private void GenerateWwiseId_Click(object sender, RoutedEventArgs e)
+        private void AddPresetGestureTrack_Click(object sender, RoutedEventArgs e)
         {
-            PackageEditorExperimentsO.GenerateWwiseId(GetPEWindow());
+            PackageEditorExperimentsO.AddPresetTrack("Gesture", GetPEWindow());
         }
 
-        private void CreateTestTLKWithStringIDs_Click(object sender, RoutedEventArgs e)
+        private void AddPresetGestureTrack2_Click(object sender, RoutedEventArgs e)
         {
-            PackageEditorExperimentsO.CreateTestTLKWithStringIDs(GetPEWindow());
-        }
-
-        private void UpdateLocalFunctions_Click(object sender, RoutedEventArgs e)
-        {
-            PackageEditorExperimentsO.UpdateLocalFunctions(GetPEWindow());
-        }
-
-        private void DumpTOC_Click(object sender, RoutedEventArgs e)
-        {
-            PackageEditorExperimentsO.DumpTOC();
-        }
-        private void LE1Elevator_Click(object sender, RoutedEventArgs e)
-        {
-            PackageEditorExperimentsO.LE1Elevator(GetPEWindow());
-        }
-
-        private void FixPinkVisor_Click(object sender, RoutedEventArgs e)
-        {
-            PackageEditorExperimentsO.FixPinkVisor(GetPEWindow());
-        }
-        private void MakeLocalizedTLK_Click(object sender, RoutedEventArgs e)
-        {
-            PackageEditorExperimentsO.MakeLocalizedTLK(GetPEWindow());
-        }
-        private void FindUncapitalizedText_Click(object sender, RoutedEventArgs e)
-        {
-            PackageEditorExperimentsO.FindUncapitalizedTargetText(GetPEWindow());
+            PackageEditorExperimentsO.AddPresetTrack("Gesture2", GetPEWindow());
         }
         #endregion
 

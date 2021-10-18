@@ -33,16 +33,17 @@ namespace LegendaryExplorerCore.Unreal
         private readonly int sourceExportUIndex;
 
         /// <summary>
-        /// Gets the UProperty with the specified name, returns null if not found. The property name is checked case insensitively. 
+        /// Gets the UProperty with the specified name and optionally a static array index, returns null if not found. The property name is checked case insensitively. 
         /// Ensure the generic type matches the result you want or you will receive a null object back.
         /// </summary>
         /// <param name="name">Name of property to find</param>
+        /// <param name="staticArrayIdx"></param>
         /// <returns>specified UProperty or null if not found</returns>
-        public T GetProp<T>(NameReference name) where T : Property
+        public T GetProp<T>(NameReference name, int staticArrayIdx = 0) where T : Property
         {
             foreach (var prop in this)
             {
-                if (prop.Name == name)
+                if (prop.Name == name && prop.StaticArrayIndex == staticArrayIdx)
                 {
                     return prop as T;
                 }
@@ -51,17 +52,18 @@ namespace LegendaryExplorerCore.Unreal
         }
 
         /// <summary>
-        /// Gets the UProperty with the specified name. Will get default values for properties that are part of the type but do not appear in the collection.
+        /// Gets the UProperty with the specified name and (optionally) static array index. Will get default values for properties that are part of the type but do not appear in the collection.
         /// The property name is checked case insensitively. 
         /// Ensure the property name is spelled correctly and that generic type matches the result you want or it will throw an exception.
         /// </summary>
         /// <param name="name">Name of property to find</param>
+        /// <param name="staticArrayIdx"></param>
         /// <returns>specified UProperty</returns>
-        public T GetPropOrDefault<T>(string name, PackageCache packageCache) where T : Property
+        public T GetPropOrDefault<T>(NameReference name, int staticArrayIdx = 0, PackageCache packageCache = null) where T : Property
         {
             foreach (var prop in this)
             {
-                if (prop.Name.Name != null && string.Equals(prop.Name.Name, name, StringComparison.CurrentCultureIgnoreCase))
+                if (prop.Name.Name != null && prop.Name == name && prop.StaticArrayIndex == staticArrayIdx)
                 {
                     return (T)prop;
                 }
@@ -69,7 +71,9 @@ namespace LegendaryExplorerCore.Unreal
 
             if (info.TryGetPropInfo(name, game, out PropertyInfo propInfo))
             {
-                return (T)GlobalUnrealObjectInfo.getDefaultProperty(game, name, propInfo, packageCache, true, IsImmutable);
+                var defaultProperty = (T)GlobalUnrealObjectInfo.getDefaultProperty(game, name, propInfo, packageCache, true, IsImmutable);
+                defaultProperty.StaticArrayIndex = staticArrayIdx;
+                return defaultProperty;
             }
             //dynamic lookup
             try
@@ -83,22 +87,24 @@ namespace LegendaryExplorerCore.Unreal
                 ClassInfo classInfo = GlobalUnrealObjectInfo.generateClassInfo(exportToBuildFor);
                 if (classInfo.TryGetPropInfo(name, game, out propInfo))
                 {
-                    return (T)GlobalUnrealObjectInfo.getDefaultProperty(game, name, propInfo, packageCache, true, IsImmutable);
+                    var defaultProperty = (T)GlobalUnrealObjectInfo.getDefaultProperty(game, name, propInfo, packageCache, true, IsImmutable);
+                    defaultProperty.StaticArrayIndex = staticArrayIdx;
+                    return defaultProperty;
                 }
             }
             catch
             {
-                throw new ArgumentException($"Property \"{name}\" does not exist on {TypeName}", nameof(name));
+                throw new ArgumentException($"Property \"{name.Instanced}\" does not exist on {TypeName}", nameof(name));
             }
 
-            throw new ArgumentException($"Property \"{name}\" does not exist on {TypeName}", nameof(name));
+            throw new ArgumentException($"Property \"{name.Instanced}\" does not exist on {TypeName}", nameof(name));
         }
 
         public bool TryReplaceProp(Property prop)
         {
             for (int i = 0; i < this.Count; i++)
             {
-                if (this[i].Name == prop.Name)
+                if (this[i].Name == prop.Name && this[i].StaticArrayIndex == prop.StaticArrayIndex)
                 {
                     this[i] = prop;
                     return true;
@@ -121,7 +127,7 @@ namespace LegendaryExplorerCore.Unreal
             {
                 prop.WriteTo(stream, pcc, IsImmutable);
             }
-            if (!IsImmutable && requireNoneAtEnd && (Count == 0 || !(this.Last() is NoneProperty)))
+            if (!IsImmutable && requireNoneAtEnd && (Count == 0 || this.Last() is not NoneProperty))
             {
                 stream.WriteNoneProperty(pcc);
             }
@@ -159,7 +165,7 @@ namespace LegendaryExplorerCore.Unreal
             {
                 while (stream.Position + 8 <= stream.Length)
                 {
-                    long propertyStartPosition = stream.Position;
+                    int propertyStartPosition = (int)stream.Position;
                     int nameIdx = stream.ReadInt32();
                     if (!pcc.IsName(nameIdx))
                     {
@@ -186,7 +192,7 @@ namespace LegendaryExplorerCore.Unreal
                     int staticArrayIndex = stream.ReadInt32();
                     PropertyType type;
                     string namev = pcc.GetNameEntry(typeIdx);
-                    //Debug.WriteLine("Reading " + name + " (" + namev + ") at 0x" + (stream.Position - 24).ToString("X8"));
+                    //Debug.WriteLine("Reading " + nameRef.Instanced + " (" + namev + ") at 0x" + (stream.Position - 24).ToString("X8"));
                     if (Enum.IsDefined(typeof(PropertyType), namev))
                     {
                         Enum.TryParse(namev, out type);
@@ -202,7 +208,7 @@ namespace LegendaryExplorerCore.Unreal
                         case PropertyType.StructProperty:
                             string structType = pcc.GetNameEntry(stream.ReadInt32());
                             stream.Seek(4, SeekOrigin.Current);
-                            long valOffset = stream.Position;
+                            int valOffset = (int)stream.Position;
                             if (GlobalUnrealObjectInfo.IsImmutable(structType, pcc.Game))
                             {
                                 PropertyCollection structProps = ReadImmutableStruct(export, stream, structType, size, packageCache, entry);
@@ -225,7 +231,7 @@ namespace LegendaryExplorerCore.Unreal
                         case PropertyType.ComponentProperty:
                             prop = new ObjectProperty(stream, nameRef)
                             {
-                                internalPropType = type
+                                InternalPropType = type
                             };
                             break;
                         case PropertyType.NameProperty:
@@ -251,7 +257,7 @@ namespace LegendaryExplorerCore.Unreal
                                         //Debug.WriteLine("Reading enum for ME1/ME2 at 0x" + propertyStartPosition.ToString("X6"));
 
                                         //Attempt to get info without lookup first
-                                        var enumname = GlobalUnrealObjectInfo.GetEnumType(pcc.Game, name, typeName);
+                                        var enumname = GlobalUnrealObjectInfo.GetEnumType(pcc.Game, nameRef, typeName);
                                         ClassInfo classInfo = null;
                                         if (enumname == null && entry is ExportEntry exp)
                                         {
@@ -259,7 +265,7 @@ namespace LegendaryExplorerCore.Unreal
                                         }
 
                                         //Use DB info or attempt lookup
-                                        enumType = new NameReference(enumname ?? GlobalUnrealObjectInfo.GetEnumType(pcc.Game, name, typeName == @"ScriptStruct" ? entry.ObjectName : typeName, classInfo));
+                                        enumType = new NameReference(enumname ?? GlobalUnrealObjectInfo.GetEnumType(pcc.Game, nameRef, typeName == @"ScriptStruct" ? entry.ObjectName : typeName, classInfo));
                                     }
                                     try
                                     {
@@ -363,7 +369,7 @@ namespace LegendaryExplorerCore.Unreal
         {
             IMEPackage pcc = export.FileRef;
             //strip transients unless this is a class definition
-            bool stripTransients = !(parsingEntry != null && (parsingEntry.ClassName == "Class" || parsingEntry.ClassName == "ScriptStruct"));
+            bool stripTransients = parsingEntry is not {ClassName: "Class" or "ScriptStruct"};
 
             MEGame structValueLookupGame = pcc.Game;
             var props = new PropertyCollection(export, structType);
@@ -383,14 +389,14 @@ namespace LegendaryExplorerCore.Unreal
                     break;
                 default:
                     Debug.WriteLine("Unknown struct type: " + structType);
-                    props.Add(new UnknownProperty(stream, size) { StartOffset = stream.Position });
+                    props.Add(new UnknownProperty(stream, size) { StartOffset = (int)stream.Position });
                     return props;
             }
 
-            PropertyCollection defaultProps = GlobalUnrealObjectInfo.getDefaultStructValue(structValueLookupGame, structType, stripTransients, packageCache);
+            PropertyCollection defaultProps = GlobalUnrealObjectInfo.getDefaultStructValue(structValueLookupGame, structType, stripTransients, packageCache, false);
             if (defaultProps == null)
             {
-                long startPos = stream.Position;
+                int startPos = (int)stream.Position;
                 props.Items.Add(new UnknownProperty(stream, size) { StartOffset = startPos });
                 return props;
             }
@@ -424,7 +430,7 @@ namespace LegendaryExplorerCore.Unreal
             {
                 throw new EndOfStreamException("tried to read past bounds of Export Data");
             }
-            long startPos = stream.Position;
+            int startPos = (int)stream.Position;
 
             switch (template.PropType)
             {
@@ -435,7 +441,7 @@ namespace LegendaryExplorerCore.Unreal
                 case PropertyType.ObjectProperty:
                 case PropertyType.InterfaceProperty:
                 case PropertyType.ComponentProperty:
-                    return new ObjectProperty(stream, template.Name) { StartOffset = startPos, internalPropType = template.PropType };
+                    return new ObjectProperty(stream, template.Name) { StartOffset = startPos, InternalPropType = template.PropType };
                 case PropertyType.StringRefProperty:
                     return new StringRefProperty(stream, template.Name) { StartOffset = startPos };
                 case PropertyType.NameProperty:
@@ -459,7 +465,7 @@ namespace LegendaryExplorerCore.Unreal
                     arrayProperty.StartOffset = startPos;
                     return arrayProperty;//this implementation needs checked, as I am not 100% sure of it's validity.
                 case PropertyType.StructProperty:
-                    long valuePos = stream.Position;
+                    int valuePos = (int)stream.Position;
                     PropertyCollection structProps = ReadImmutableStruct(export, stream, GlobalUnrealObjectInfo.GetPropertyInfo(pcc.Game, template.Name, structType, containingExport: export).Reference, 0, packageCache, export);
                     var structProp = new StructProperty(nestedStructType ?? structType, structProps, template.Name, true)
                     {
@@ -481,7 +487,7 @@ namespace LegendaryExplorerCore.Unreal
         {
             IMEPackage pcc = export.FileRef;
             long arrayOffset = IsInImmutable ? stream.Position : stream.Position - 24;
-            ArrayType arrayType = GlobalUnrealObjectInfo.GetArrayType(pcc.Game, name, enclosingType, parsingEntry);
+            ArrayType arrayType = GlobalUnrealObjectInfo.GetArrayType(pcc.Game, name, enclosingType == "ScriptStruct" ? export.ObjectName : enclosingType , parsingEntry);
             //Debug.WriteLine("Reading array length at 0x" + stream.Position.ToString("X5"));
             int count = stream.ReadInt32();
             switch (arrayType)
@@ -491,7 +497,7 @@ namespace LegendaryExplorerCore.Unreal
                         var props = new List<ObjectProperty>();
                         for (int i = 0; i < count; i++)
                         {
-                            long startPos = stream.Position;
+                            int startPos = (int)stream.Position;
                             props.Add(new ObjectProperty(stream) { StartOffset = startPos });
                         }
                         return new ArrayProperty<ObjectProperty>(arrayOffset, props, name) { Reference = "Object" }; //TODO: set reference to specific object type?
@@ -501,7 +507,7 @@ namespace LegendaryExplorerCore.Unreal
                         var props = new List<NameProperty>();
                         for (int i = 0; i < count; i++)
                         {
-                            long startPos = stream.Position;
+                            int startPos = (int)stream.Position;
                             props.Add(new NameProperty(stream, pcc) { StartOffset = startPos });
                         }
                         return new ArrayProperty<NameProperty>(arrayOffset, props, name) { Reference = "Name" };
@@ -518,19 +524,19 @@ namespace LegendaryExplorerCore.Unreal
                         }
 
                         //Use DB info or attempt lookup
-                        NameReference enumType = new NameReference(enumname ?? GlobalUnrealObjectInfo.GetEnumType(pcc.Game, name, enclosingType, classInfo));
+                        var enumType = new NameReference(enumname ?? GlobalUnrealObjectInfo.GetEnumType(pcc.Game, name, enclosingType, classInfo));
 
                         var props = new List<EnumProperty>();
                         for (int i = 0; i < count; i++)
                         {
-                            long startPos = stream.Position;
+                            int startPos = (int)stream.Position;
                             props.Add(new EnumProperty(stream, pcc, enumType) { StartOffset = startPos });
                         }
                         return new ArrayProperty<EnumProperty>(arrayOffset, props, name) { Reference = enumType };
                     }
                 case ArrayType.Struct:
                     {
-                        long startPos = stream.Position;
+                        int startPos = (int)stream.Position;
                         var props = new List<StructProperty>();
                         var propertyInfo = GlobalUnrealObjectInfo.GetPropertyInfo(pcc.Game, name, enclosingType, containingExport: parsingEntry as ExportEntry);
                         if (propertyInfo == null && parsingEntry is ExportEntry parsingExport)
@@ -552,7 +558,7 @@ namespace LegendaryExplorerCore.Unreal
                             }
                             for (int i = 0; i < count; i++)
                             {
-                                long offset = stream.Position;
+                                int offset = (int)stream.Position;
                                 try
                                 {
                                     PropertyCollection structProps = ReadImmutableStruct(export, stream, arrayStructType, arraySize / count, parsingEntry: parsingEntry, packageCache: packageCache);
@@ -573,7 +579,7 @@ namespace LegendaryExplorerCore.Unreal
                         {
                             for (int i = 0; i < count; i++)
                             {
-                                long structOffset = stream.Position;
+                                int structOffset = (int)stream.Position;
                                 //Debug.WriteLine("reading array struct: " + arrayStructType + " at 0x" + stream.Position.ToString("X5"));
                                 PropertyCollection structProps = ReadProps(export, stream.BaseStream, arrayStructType, includeNoneProperty: IncludeNoneProperties, entry: parsingEntry, packageCache: packageCache);
 #if DEBUG
@@ -601,7 +607,7 @@ namespace LegendaryExplorerCore.Unreal
                         var props = new List<BoolProperty>();
                         for (int i = 0; i < count; i++)
                         {
-                            long startPos = stream.Position;
+                            int startPos = (int)stream.Position;
                             props.Add(new BoolProperty(stream, pcc, isArrayContained: true) { StartOffset = startPos });
                         }
                         return new ArrayProperty<BoolProperty>(arrayOffset, props, name) { Reference = "Bool" };
@@ -611,7 +617,7 @@ namespace LegendaryExplorerCore.Unreal
                         var props = new List<StrProperty>();
                         for (int i = 0; i < count; i++)
                         {
-                            long startPos = stream.Position;
+                            int startPos = (int)stream.Position;
                             props.Add(new StrProperty(stream) { StartOffset = startPos });
                         }
                         return new ArrayProperty<StrProperty>(arrayOffset, props, name) { Reference = "String" };
@@ -621,7 +627,7 @@ namespace LegendaryExplorerCore.Unreal
                         var props = new List<FloatProperty>();
                         for (int i = 0; i < count; i++)
                         {
-                            long startPos = stream.Position;
+                            int startPos = (int)stream.Position;
                             props.Add(new FloatProperty(stream) { StartOffset = startPos });
                         }
                         return new ArrayProperty<FloatProperty>(arrayOffset, props, name) { Reference = "Float" };
@@ -633,7 +639,7 @@ namespace LegendaryExplorerCore.Unreal
                         var props = new List<StringRefProperty>();
                         for (int i = 0; i < count; i++)
                         {
-                            long startPos = stream.Position;
+                            int startPos = (int)stream.Position;
                             props.Add(new StringRefProperty(stream) { StartOffset = startPos });
                         }
                         return new ArrayProperty<StringRefProperty>(arrayOffset, props, name) { Reference = "StringRef" };
@@ -644,7 +650,7 @@ namespace LegendaryExplorerCore.Unreal
                         var props = new List<IntProperty>();
                         for (int i = 0; i < count; i++)
                         {
-                            long startPos = stream.Position;
+                            int startPos = (int)stream.Position;
                             props.Add(new IntProperty(stream) { StartOffset = startPos });
                         }
                         return new ArrayProperty<IntProperty>(arrayOffset, props, name) { Reference = "Int" }; ;
@@ -669,6 +675,16 @@ namespace LegendaryExplorerCore.Unreal
             }
             return false;
         }
+
+        public PropertyCollection DeepClone()
+        {
+            var clone = new PropertyCollection {endOffset = endOffset, IsImmutable = IsImmutable};
+            for (int i = 0; i < Count; i++)
+            {
+                clone.Add(this[i].DeepClone());
+            }
+            return clone;
+        }
     }
 
     public abstract class Property
@@ -678,12 +694,12 @@ namespace LegendaryExplorerCore.Unreal
         /// <summary>
         /// Offset to the value for this property - note not all properties have actual values.
         /// </summary>
-        public long ValueOffset;
+        public int ValueOffset;
 
         /// <summary>
         /// Offset to the start of this property as it was read by PropertyCollection.ReadProps()
         /// </summary>
-        public long StartOffset { get; set; }
+        public int StartOffset { get; set; }
 
         public NameReference Name { get; set; }
 
@@ -712,6 +728,8 @@ namespace LegendaryExplorerCore.Unreal
             WriteTo(stream.Writer, pcc, valueOnly);
             return stream.Length;
         }
+
+        public abstract Property DeepClone();
     }
 
     [DebuggerDisplay("NoneProperty")]
@@ -723,7 +741,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public NoneProperty(EndianReader stream) : this()
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
         }
 
         public override void WriteTo(EndianWriter stream, IMEPackage pcc, bool valueOnly = false)
@@ -733,9 +751,11 @@ namespace LegendaryExplorerCore.Unreal
                 stream.WriteNoneProperty(pcc);
             }
         }
+
+        public override NoneProperty DeepClone() => (NoneProperty)MemberwiseClone();
     }
 
-    [DebuggerDisplay("StructProperty | {Name.Name} - {StructType}")]
+    [DebuggerDisplay("StructProperty | {Name.Instanced} - {StructType}")]
     public class StructProperty : Property, INotifyPropertyChanged
     {
         public override PropertyType PropType => PropertyType.StructProperty;
@@ -774,14 +794,14 @@ namespace LegendaryExplorerCore.Unreal
             }
         }
 
-        public T GetProp<T>(string name) where T : Property
+        public T GetProp<T>(string name, int staticArrayIndex = 0) where T : Property
         {
-            return Properties.GetProp<T>(name);
+            return Properties.GetProp<T>(name, staticArrayIndex);
         }
 
-        public T GetPropOrDefault<T>(string name, PackageCache packageCache = null) where T : Property
+        public T GetPropOrDefault<T>(NameReference name, int staticArrayIdx = 0, PackageCache packageCache = null) where T : Property
         {
-            return Properties.GetPropOrDefault<T>(name, packageCache);
+            return Properties.GetPropOrDefault<T>(name, staticArrayIdx, packageCache);
         }
 
         public override void WriteTo(EndianWriter stream, IMEPackage pcc, bool valueOnly = false)
@@ -794,11 +814,18 @@ namespace LegendaryExplorerCore.Unreal
             {
                 stream.WriteStructProperty(pcc, Name, StructType, () =>
                 {
-                    EndianReader m = new EndianReader(MemoryManager.GetMemoryStream()) { Endian = pcc.Endian };
+                    var m = new EndianReader(MemoryManager.GetMemoryStream()) { Endian = pcc.Endian };
                     Properties.WriteTo(m.Writer, pcc);
                     return m.BaseStream;
                 }, StaticArrayIndex);
             }
+        }
+
+        public override StructProperty DeepClone()
+        {
+            var clone = (StructProperty)MemberwiseClone();
+            clone.Properties = Properties.DeepClone();
+            return clone;
         }
 
         /// <summary>
@@ -809,7 +836,7 @@ namespace LegendaryExplorerCore.Unreal
         /// <returns></returns>
         public static StructProperty FromGuid(Guid guid, string name = null)
         {
-            PropertyCollection pc = new PropertyCollection();
+            var pc = new PropertyCollection();
             var ba = guid.ToByteArray();
             pc.Add(new IntProperty(BitConverter.ToInt32(ba, 0), "A"));
             pc.Add(new IntProperty(BitConverter.ToInt32(ba, 4), "B"));
@@ -823,7 +850,7 @@ namespace LegendaryExplorerCore.Unreal
 #pragma warning restore
     }
 
-    [DebuggerDisplay("IntProperty | {Name} = {Value}")]
+    [DebuggerDisplay("IntProperty | {Name.Instanced} = {Value}")]
     public class IntProperty : Property, IComparable, INotifyPropertyChanged
     {
         public override PropertyType PropType => PropertyType.IntProperty;
@@ -832,7 +859,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public IntProperty(EndianReader stream, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             Value = stream.ReadInt32();
         }
 
@@ -854,6 +881,8 @@ namespace LegendaryExplorerCore.Unreal
                 stream.WriteInt32(Value);
             }
         }
+
+        public override IntProperty DeepClone() => (IntProperty) MemberwiseClone();
 
         public int CompareTo(object obj)
         {
@@ -882,13 +911,13 @@ namespace LegendaryExplorerCore.Unreal
 #pragma warning restore
     }
 
-    [DebuggerDisplay("FloatProperty | {Name} = {Value}")]
+    [DebuggerDisplay("FloatProperty | {Name.Instanced} = {Value}")]
     public class FloatProperty : Property, IComparable, INotifyPropertyChanged
     {
         public override PropertyType PropType => PropertyType.FloatProperty;
         private readonly int _originalData; //This is used because -0 and 0 have different byte patterns, and to reserialize the same, we must write back the correct one.
 
-        float _value;
+        private float _value;
         public float Value
         {
             get => _value;
@@ -906,7 +935,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public FloatProperty(EndianReader stream, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             _originalData = stream.ReadInt32();
             Value = BitConverter.Int32BitsToSingle(_originalData);
         }
@@ -927,6 +956,7 @@ namespace LegendaryExplorerCore.Unreal
             // or we will re-serialize this wrong. This check only
             // matters when the value has not changed from the original.
 
+            // ReSharper disable once CompareOfFloatsByEqualityOperator
             bool isNegativeZero = Value == 0 && BitConverter.Int32BitsToSingle(_originalData) == Value && _originalData != 0;
             if (!valueOnly)
             {
@@ -954,6 +984,8 @@ namespace LegendaryExplorerCore.Unreal
             }
         }
 
+        public override FloatProperty DeepClone() => (FloatProperty) MemberwiseClone();
+
         public int CompareTo(object obj)
         {
             switch (obj)
@@ -980,7 +1012,7 @@ namespace LegendaryExplorerCore.Unreal
         public event PropertyChangedEventHandler PropertyChanged;
     }
 
-    [DebuggerDisplay("ObjectProperty | {Name} = {Value}")]
+    [DebuggerDisplay("ObjectProperty | {Name.Instanced} = {Value}")]
     public class ObjectProperty : Property, IComparable, INotifyPropertyChanged
     {
         /// <summary>
@@ -988,19 +1020,18 @@ namespace LegendaryExplorerCore.Unreal
         /// </summary>
         /// <param name="package"></param>
         /// <returns></returns>
-        public IEntry ResolveToEntry(IMEPackage package)
-        {
-            return package.IsEntry(Value) ? package.GetEntry(Value) : null;
-        }
+        public IEntry ResolveToEntry(IMEPackage package) => package.GetEntry(Value);
+
         public override PropertyType PropType => PropertyType.ObjectProperty;
 
-        public PropertyType internalPropType = PropertyType.ObjectProperty;
+        //We use ObjectProperty to represent InterfaceProperty and ComponentProperty too. This stores the "real" type.
+        public PropertyType InternalPropType = PropertyType.ObjectProperty;
 
         public int Value { get; set; }
 
         public ObjectProperty(EndianReader stream, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             Value = stream.ReadInt32();
         }
 
@@ -1011,7 +1042,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public ObjectProperty(IEntry referencedEntry, NameReference? name = null) : base(name)
         {
-            Value = referencedEntry.UIndex;
+            Value = referencedEntry?.UIndex ?? 0;
         }
 
         public ObjectProperty() { }
@@ -1020,13 +1051,15 @@ namespace LegendaryExplorerCore.Unreal
         {
             if (!valueOnly)
             {
-                stream.WriteObjectProperty(pcc, Name, Value, StaticArrayIndex, internalPropType);
+                stream.WriteObjectProperty(pcc, Name, Value, StaticArrayIndex, InternalPropType);
             }
             else
             {
                 stream.WriteInt32(Value);
             }
         }
+
+        public override ObjectProperty DeepClone() => (ObjectProperty)MemberwiseClone();
 
         public int CompareTo(object obj)
         {
@@ -1082,7 +1115,7 @@ namespace LegendaryExplorerCore.Unreal
 #pragma warning restore
     }
 
-    [DebuggerDisplay("NameProperty | {Name} = {Value}")]
+    [DebuggerDisplay("NameProperty | {Name.Instanced} = {Value}")]
     public class NameProperty : Property, INotifyPropertyChanged
     {
         public override PropertyType PropType => PropertyType.NameProperty;
@@ -1096,7 +1129,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public NameProperty(EndianReader stream, IMEPackage pcc, NameReference? propertyName = null) : base(propertyName)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             Value = new NameReference(pcc.GetNameEntry(stream.ReadInt32()), stream.ReadInt32());
         }
 
@@ -1117,6 +1150,8 @@ namespace LegendaryExplorerCore.Unreal
                 stream.WriteInt32(Value.Number);
             }
         }
+
+        public override NameProperty DeepClone() => (NameProperty)MemberwiseClone();
 
         public override bool Equals(object obj)
         {
@@ -1158,7 +1193,7 @@ namespace LegendaryExplorerCore.Unreal
 #pragma warning restore
     }
 
-    [DebuggerDisplay("BoolProperty | {Name} = {Value}")]
+    [DebuggerDisplay("BoolProperty | {Name.Instanced} = {Value}")]
     public class BoolProperty : Property, INotifyPropertyChanged
     {
         public override PropertyType PropType => PropertyType.BoolProperty;
@@ -1167,7 +1202,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public BoolProperty(EndianReader stream, IMEPackage pcc, NameReference? name = null, bool isArrayContained = false) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             if (pcc.Game < MEGame.ME3 && pcc.Platform != MEPackage.GamePlatform.PS3 && isArrayContained)
             {
                 //ME2 seems to read 1 byte... sometimes...
@@ -1208,6 +1243,8 @@ namespace LegendaryExplorerCore.Unreal
             }
         }
 
+        public override BoolProperty DeepClone() => (BoolProperty)MemberwiseClone();
+
         public static implicit operator BoolProperty(bool n)
         {
             return new BoolProperty(n);
@@ -1222,7 +1259,7 @@ namespace LegendaryExplorerCore.Unreal
 #pragma warning restore
     }
 
-    [DebuggerDisplay("ByteProperty | {Name} = {Value}")]
+    [DebuggerDisplay("ByteProperty | {Name.Instanced} = {Value}")]
     public class ByteProperty : Property, INotifyPropertyChanged
     {
         public override PropertyType PropType => PropertyType.ByteProperty;
@@ -1236,7 +1273,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public ByteProperty(EndianReader stream, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             Value = (byte)stream.ReadByte();
         }
 
@@ -1251,6 +1288,8 @@ namespace LegendaryExplorerCore.Unreal
                 stream.WriteByte(Value);
             }
         }
+
+        public override ByteProperty DeepClone() => (ByteProperty)MemberwiseClone();
 #pragma warning disable
         public event PropertyChangedEventHandler PropertyChanged;
 #pragma warning restore
@@ -1269,8 +1308,8 @@ namespace LegendaryExplorerCore.Unreal
 
         public BioMask4Property(EndianReader stream, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
-            Value = (byte)stream.ReadByte();
+            ValueOffset = (int)stream.Position;
+            Value = stream.ReadByte();
         }
 
         public override void WriteTo(EndianWriter stream, IMEPackage pcc, bool valueOnly = false)
@@ -1281,31 +1320,31 @@ namespace LegendaryExplorerCore.Unreal
             }
             stream.WriteByte(Value);
         }
+
+        public override BioMask4Property DeepClone() => (BioMask4Property)MemberwiseClone();
 #pragma warning disable
         public event PropertyChangedEventHandler PropertyChanged;
 #pragma warning restore
     }
 
-    [DebuggerDisplay("EnumProperty | {Name} = {Value.Name}")]
+    [DebuggerDisplay("EnumProperty | {Name.Instanced} = {Value.Instanced}")]
     public class EnumProperty : Property, INotifyPropertyChanged
     {
         public override PropertyType PropType => PropertyType.ByteProperty;
 
         public NameReference EnumType { get; }
         public NameReference Value { get; set; }
-        public List<NameReference> EnumValues { get; }
 
         public EnumProperty(EndianReader stream, IMEPackage pcc, NameReference enumType, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             EnumType = enumType;
-            EnumValues = GlobalUnrealObjectInfo.GetEnumValues(pcc.Game, enumType, true);
 
             if (pcc.Game == MEGame.ME1 && pcc.Platform == MEPackage.GamePlatform.Xenon)
             {
                 // ME1 Xenon uses 1 byte values
                 var enumIdx = stream.ReadByte();
-                Value = EnumValues[enumIdx + 1]; // +1 cause we don't use 'None' first item
+                Value = GlobalUnrealObjectInfo.GetEnumValues(pcc.Game, enumType)[enumIdx];
             }
             else
             {
@@ -1322,7 +1361,6 @@ namespace LegendaryExplorerCore.Unreal
             EnumType = enumType;
             NameReference enumVal = value;
             Value = enumVal;
-            EnumValues = GlobalUnrealObjectInfo.GetEnumValues(meGame, enumType, true);
         }
 
         /// <summary>
@@ -1334,12 +1372,11 @@ namespace LegendaryExplorerCore.Unreal
         public EnumProperty(NameReference enumType, MEGame meGame, NameReference? name = null) : base(name)
         {
             EnumType = enumType;
-            EnumValues = GlobalUnrealObjectInfo.GetEnumValues(meGame, enumType, true);
-            if (EnumValues == null)
+            if (!GlobalUnrealObjectInfo.IsValidEnum(meGame, enumType))
             {
                 throw new Exception($"{enumType} is not a valid enum type in {meGame}!");
             }
-            Value = EnumValues[0];
+            Value = "None";
         }
 
         public override void WriteTo(EndianWriter stream, IMEPackage pcc, bool valueOnly = false)
@@ -1354,6 +1391,8 @@ namespace LegendaryExplorerCore.Unreal
                 stream.WriteInt32(Value.Number);
             }
         }
+
+        public override EnumProperty DeepClone() => (EnumProperty)MemberwiseClone();
 #pragma warning disable
         public event PropertyChangedEventHandler PropertyChanged;
 #pragma warning restore
@@ -1389,7 +1428,7 @@ namespace LegendaryExplorerCore.Unreal
         public byte[] bytes;
         public ImmutableByteArrayProperty(long startOffset, int count, EndianReader stream, NameReference? name) : base(name)
         {
-            ValueOffset = startOffset;
+            ValueOffset = (int)startOffset;
             bytes = stream.ReadBytes(count);
         }
 
@@ -1420,6 +1459,13 @@ namespace LegendaryExplorerCore.Unreal
             }
         }
 
+        public override ImmutableByteArrayProperty DeepClone()
+        {
+            var clone = (ImmutableByteArrayProperty)MemberwiseClone();
+            clone.bytes = bytes.ArrayClone();
+            return clone;
+        }
+
         public override IReadOnlyList<Property> Properties => new List<Property>();
         public override int Count => bytes.Length;
         public override void Clear()
@@ -1436,7 +1482,7 @@ namespace LegendaryExplorerCore.Unreal
         }
     }
 
-    [DebuggerDisplay("ArrayProperty<{typeof(T).Name,nq}> | {Name}, Length = {Values.Count}")]
+    [DebuggerDisplay("ArrayProperty<{typeof(T).Name,nq}> | {Name.Instanced}, Length = {Values.Count}")]
     public class ArrayProperty<T> : ArrayPropertyBase, IList<T> where T : Property
     {
         public List<T> Values { get; set; }
@@ -1444,7 +1490,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public ArrayProperty(long startOffset, List<T> values, NameReference name) : this(values, name)
         {
-            ValueOffset = startOffset;
+            ValueOffset = (int)startOffset;
         }
 
         public ArrayProperty(NameReference name) : this(new List<T>(), name)
@@ -1482,6 +1528,18 @@ namespace LegendaryExplorerCore.Unreal
                     prop.WriteTo(stream, pcc, true);
                 }
             }
+        }
+
+        public override ArrayProperty<T> DeepClone()
+        {
+            var clone = (ArrayProperty<T>)MemberwiseClone();
+            clone.Values = new List<T>(Values.Count);
+            for (int i = 0; i < Values.Count; i++)
+            {
+                clone.Values.Add((T)Values[i].DeepClone());
+            }
+
+            return clone;
         }
 
         #region IEnumerable<T>
@@ -1563,7 +1621,7 @@ namespace LegendaryExplorerCore.Unreal
         }
     }
 
-    [DebuggerDisplay("StrProperty | {Name} = {Value}")]
+    [DebuggerDisplay("StrProperty | {Name.Instanced} = {Value}")]
     public class StrProperty : Property
     {
         public override PropertyType PropType => PropertyType.StrProperty;
@@ -1572,7 +1630,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public StrProperty(EndianReader stream, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             int count = stream.ReadInt32();
             var streamPos = stream.Position;
 
@@ -1622,6 +1680,8 @@ namespace LegendaryExplorerCore.Unreal
             }
         }
 
+        public override StrProperty DeepClone() => (StrProperty)MemberwiseClone();
+
         public static implicit operator StrProperty(string s)
         {
             return new StrProperty(s);
@@ -1638,7 +1698,7 @@ namespace LegendaryExplorerCore.Unreal
         }
     }
 
-    [DebuggerDisplay("StringRefProperty | {Name} = {Value}")]
+    [DebuggerDisplay("StringRefProperty | {Name.Instanced} = ${Value}")]
     public class StringRefProperty : Property, INotifyPropertyChanged
     {
         public override PropertyType PropType => PropertyType.StringRefProperty;
@@ -1647,7 +1707,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public StringRefProperty(EndianReader stream, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             Value = stream.ReadInt32();
         }
 
@@ -1673,6 +1733,9 @@ namespace LegendaryExplorerCore.Unreal
                 stream.WriteInt32(Value);
             }
         }
+
+        public override StringRefProperty DeepClone() => (StringRefProperty)MemberwiseClone();
+
 #pragma warning disable
         public event PropertyChangedEventHandler PropertyChanged;
 #pragma warning restore
@@ -1686,7 +1749,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public DelegateProperty(EndianReader stream, IMEPackage pcc, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             Value = new ScriptDelegate(stream.ReadInt32(), new NameReference(pcc.GetNameEntry(stream.ReadInt32()), stream.ReadInt32()));
         }
 
@@ -1707,6 +1770,8 @@ namespace LegendaryExplorerCore.Unreal
                 stream.WriteNameReference(Value.FunctionName, pcc);
             }
         }
+
+        public override DelegateProperty DeepClone() => (DelegateProperty)MemberwiseClone();
 #pragma warning disable
         public event PropertyChangedEventHandler PropertyChanged;
 #pragma warning restore
@@ -1721,7 +1786,7 @@ namespace LegendaryExplorerCore.Unreal
 
         public UnknownProperty(EndianReader stream, int size, string typeName = null, NameReference? name = null) : base(name)
         {
-            ValueOffset = stream.Position;
+            ValueOffset = (int)stream.Position;
             TypeName = typeName ?? "Unknown";
             raw = stream.ReadBytes(size);
 #if AZURE
@@ -1740,6 +1805,13 @@ namespace LegendaryExplorerCore.Unreal
                 stream.WriteInt32(StaticArrayIndex);
             }
             stream.WriteFromBuffer(raw);
+        }
+
+        public override UnknownProperty DeepClone()
+        {
+            var clone = (UnknownProperty)MemberwiseClone();
+            clone.raw = raw.ArrayClone();
+            return clone;
         }
     }
 }

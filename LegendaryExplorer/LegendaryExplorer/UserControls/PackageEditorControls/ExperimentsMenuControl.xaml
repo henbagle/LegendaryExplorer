@@ -7,15 +7,20 @@
              xmlns:sharedUi="clr-namespace:LegendaryExplorer.SharedUI"
              xmlns:converters="clr-namespace:LegendaryExplorer.SharedUI.Converters"
              mc:Ignorable="d" 
-              Header="Experiments" Padding="4">
+              Header="Experiments" Padding="4"
+             DataContext="{Binding RelativeSource={RelativeSource Self}}">
     <MenuItem Header=" &gt;&gt; FOR TOOLSET DEVELOPERS ONLY &lt;&lt;" IsEnabled="False"/>
     <MenuItem Header=" &gt;&gt; THIS STUFF CAN BREAK GAMES/TOOLSET FUNCTIONALITY &lt;&lt;" IsEnabled="False"/>
     <MenuItem Header=" &gt;&gt; DO NOT USE IF YOU DON'T KNOW WHAT YOU'RE DOING &gt;&lt;" IsEnabled="False"/>
     <MenuItem Header=" &gt;&gt; Text may not reflect actual functionality &lt;&lt;" IsEnabled="False"/>
+    <MenuItem Header="Force reload package*" Command="{Binding ForceReloadPackageCommand}" sharedUi:Bindings.VisibilityToEnabled="True" InputGestureText="Ctrl+Shift+R" ToolTip="Forcibly reloads this package file, if it was loaded from disk.&#10;This operation will drop this package out of the package sharing system across tools, be careful as edits will not sync across tools!"/>
+
     <MenuItem Header="Trigger GetProperties() on current export" Click="RefreshProperties_Clicked"/>
     <MenuItem Header="Trigger ObjectBinary GetNames() on current export" Click="TriggerObjBinGetNames_Clicked"/>
     <MenuItem Header="Trigger ObjectBinary GetUIndexes() on current export" Click="TriggerObjBinGetUIndexes_Clicked"/>
     <MenuItem Header="Rebuild Object Infos">
+        <MenuItem Header="Build ALL OT/LE Object Infos" Click="BuildAllObjectInfo_Clicked"/>
+        <Separator/>
         <MenuItem Header="Build ME1 Object Info" Click="BuildME1ObjectInfo_Clicked"/>
         <MenuItem Header="Build ME2 Object Info" Click="BuildME2ObjectInfo_Clicked"/>
         <MenuItem Header="Build ME3 Object Info" Click="BuildME3ObjectInfo_Clicked"/>
@@ -30,6 +35,7 @@
         <MenuItem Header="Generate ME2/ME3 object info diff" Click="GenerateObjectInfoDiff_Click"/>
     </MenuItem>
     <MenuItem Header="Mgamerz's Programming Circus">
+        <MenuItem Header="Force Vignette Off in coded game" Click="ForceVignetteOff_Click"/>
         <MenuItem Header="Dump LE1 TLK to XML" Click="DumpLE1TLK_Clicked"/>
         <MenuItem Header="Update textures to game" Click="RepointTexturesToGame_Click" ToolTip="You're gonna break your file lol"/>
         <MenuItem Header="Save package...">
@@ -86,7 +92,7 @@
         <MenuItem Header="UDKify" Click="UDKifyTest"/>
         <MenuItem Header="Make List of ME1 files with externally referenced textures" Click="MakeME1TextureFileList"/>
         <MenuItem Header="Condense All Level Archetypes" Click="CondenseAllArchetypes"/>
-        <MenuItem Header="Recompile All classes (ME3 Only!)" Click="RecompileAll_OnClick" />
+        <MenuItem Header="Recompile All classes in file" Click="RecompileAll_OnClick" />
         <MenuItem Header="Find OpCode" Click="FindOpCode_OnClick" />
         <MenuItem Header="Build Native Table" Click="BuildNativeTable_OnClick" />
         <MenuItem Header="DumpTaggedWwiseStreams" Click="DumptTaggedWwiseStreams_OnClick" />
@@ -94,6 +100,7 @@
         <MenuItem Header="Compile Compression Stats" Click="CompileCompressionStats_Click" />
         <MenuItem Header="Scan Headers" Click="ScanHeaders_OnCLick" />
         <MenuItem Header="Calculate Probe Functions" Click="CalculateProbeFuncs_OnClick"/>
+        <MenuItem Header="Port ShadowMaps for BioA_CitSam_800Finalroom.pcc" Click="PortShadowMaps_Click"/>
     </MenuItem>
     <MenuItem Header="Kinkojiro's 101 ways to cause an aneurysm">
         <MenuItem Header="Transfer game level's art to a different game (ME2 -> ME3 Only)" Click="TransferLevelBetweenGames"/>
@@ -101,15 +108,17 @@
         <MenuItem Header="Recook to a singular test level (from JSON)" Click="RecookLevelToTestFromJSON"/>
         <MenuItem Header="Convert to ME3 (retain instances)" Click="ConvertFileToME3"/>
         <MenuItem Header="Enumerate Class NetIndexes" Click="AutoEnumerateClassNetIndex"/>
+        <MenuItem Header="Replace all objects of Selected Class" Click="ClassUpgrade"/>
         <MenuItem Header="Set All WwiseEvent Durations" Click="SetAllWwiseEventDurations_Click"/>
         <MenuItem Header="Copy Package Name" Click="CopyPackageName"/>
         <MenuItem Header="Save as New Package" Click="SaveAsNewPackage"/>
         <MenuItem Header="Create New Seekfree Package" Click="NewSeekFreeFile"/>
         <MenuItem Header="Add All Assets to Seekfree Referencer" Click="AddAssetsToReferencer"/>
+        <MenuItem Header="Add All Groups to InterpData" Click="AddGrpsToInterpData"/>
+        <MenuItem Header="Destroyer" Click="BlowMeUp"/>
         <MenuItem Header="Trash Compactor" Click="RunTrashCompactor"/>
     </MenuItem>
-    <MenuItem Header="Other people's box of Legos">
-        <MenuItem Header="Export level to T3D" Click="ExportLevelToT3D_Click"/>
+    <MenuItem Header="HenBagle's stuff that saved five minutes once">
         <MenuItem Header="Build ME1 SuperTlk File" Click="BuildME1SuperTLK_Clicked"/>
         <MenuItem Header="Associate all file extensions" Click="AssociateAllExtensions_Clicked"/>
         <MenuItem Header="Generate audio file info JSON (check code for game)" Click="GenerateAudioFileInfo_Click"/>
@@ -121,5 +130,13 @@
         <MenuItem Header="Fix pink visor" Click="FixPinkVisor_Click"/>
         <MenuItem Header="Make localized GlobalTLK for LE1CP" Click="MakeLocalizedTLK_Click"/>
         <MenuItem Header="Find uncapitalized target text" Click="FindUncapitalizedText_Click"/>
+    </MenuItem>
+    <MenuItem Header="Other people's box of Legos">
+        <MenuItem Header="Export level to T3D" Click="ExportLevelToT3D_Click"/>
+        <MenuItem Header="Add Preset Director InterpGroup" Click="AddPresetDirectorGroup_Click" ToolTip="Add an InterpGroupDirector along with Director and DOF tracks."/>
+        <MenuItem Header="Add Preset Camera InterpGroup" Click="AddPresetCameraGroup_Click" ToolTip="Add a Camera InterpGroup with its actor set along with Move and FOV tracks."/>
+        <MenuItem Header="Add Preset Actor InterpGroup" Click="AddPresetActorGroup_Click" ToolTip="Add an Actor InterpGroup with its actor set along with Move and Gesture tracks, as designed by Mentlegen."/>
+        <MenuItem Header="Add Preset Gesture Track" Click="AddPresetGestureTrack_Click" ToolTip="Add a Gesture track with its actor set along with all the default properties."/>
+        <MenuItem Header="Add Preset Gesture Track 2" Click="AddPresetGestureTrack2_Click" ToolTip="Alternate version of preset Gesture track, as designed by Lunk."/>
     </MenuItem>
 </MenuItem>

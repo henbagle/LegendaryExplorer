@@ -103,7 +103,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                 _ => null
             };
 
-        public static string GetEnumType(MEGame game, string propName, string typeName, ClassInfo nonVanillaClassInfo = null) =>
+        public static string GetEnumType(MEGame game, NameReference propName, string typeName, ClassInfo nonVanillaClassInfo = null) =>
             game switch
             {
                 MEGame.ME1 => ME1UnrealObjectInfo.getEnumTypefromProp(typeName, propName, nonVanillaClassInfo: nonVanillaClassInfo),
@@ -127,6 +127,19 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                 MEGame.LE2 => LE2UnrealObjectInfo.getEnumValues(enumName, includeNone),
                 MEGame.LE3 => LE3UnrealObjectInfo.getEnumValues(enumName, includeNone),
                 _ => null
+            };
+
+        public static bool IsValidEnum(MEGame game, string enumName) =>
+            game switch
+            {
+                MEGame.ME1 => ME1UnrealObjectInfo.Enums.ContainsKey(enumName),
+                MEGame.ME2 => ME2UnrealObjectInfo.Enums.ContainsKey(enumName),
+                MEGame.ME3 => ME3UnrealObjectInfo.Enums.ContainsKey(enumName),
+                MEGame.UDK => ME3UnrealObjectInfo.Enums.ContainsKey(enumName),
+                MEGame.LE1 => LE1UnrealObjectInfo.Enums.ContainsKey(enumName),
+                MEGame.LE2 => LE2UnrealObjectInfo.Enums.ContainsKey(enumName),
+                MEGame.LE3 => LE3UnrealObjectInfo.Enums.ContainsKey(enumName),
+                _ => false
             };
 
 
@@ -206,7 +219,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
         /// <param name="className">Name of the class that should contain the information. If contained in a struct, this will be the name of the struct type</param>
         /// <param name="parsingEntry">Entry that is being parsed. Used for dynamic lookup if it's not in the DB</param>
         /// <returns></returns>
-        public static ArrayType GetArrayType(MEGame game, string propName, string className, IEntry parsingEntry = null)
+        public static ArrayType GetArrayType(MEGame game, NameReference propName, string className, IEntry parsingEntry = null)
         {
             switch (game)
             {
@@ -219,7 +232,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                     if (res2 == ArrayType.Int && ME2UnrealObjectInfo.ArrayTypeLookupJustFailed)
                     {
                         ME2UnrealObjectInfo.ArrayTypeLookupJustFailed = false;
-                        Debug.WriteLine($"[ME2] Array type lookup failed for {propName} in class {className} in export {parsingEntry.FileRef.GetEntryString(parsingEntry.UIndex)} in {parsingEntry.FileRef.FilePath}");
+                        Debug.WriteLine($"[ME2] Array type lookup failed for {propName.Instanced} in class {className} in export {parsingEntry.FileRef.GetEntryString(parsingEntry.UIndex)} in {parsingEntry.FileRef.FilePath}");
                     }
 #endif
                     return res2;
@@ -237,7 +250,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                             var ures = UDKUnrealObjectInfo.getArrayType(className, propName: propName, export: parsingEntry as ExportEntry);
                             if (ures == ArrayType.Int && UDKUnrealObjectInfo.ArrayTypeLookupJustFailed)
                             {
-                                Debug.WriteLine($"[UDK] Array type lookup failed for {propName} in class {className} in export {parsingEntry.FileRef.GetEntryString(parsingEntry.UIndex)} in {parsingEntry.FileRef.FilePath}");
+                                Debug.WriteLine($"[UDK] Array type lookup failed for {propName.Instanced} in class {className} in export {parsingEntry.FileRef.GetEntryString(parsingEntry.UIndex)} in {parsingEntry.FileRef.FilePath}");
                                 UDKUnrealObjectInfo.ArrayTypeLookupJustFailed = false;
                             }
                             else
@@ -245,7 +258,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                                 return ures;
                             }
                         }
-                        Debug.WriteLine($"[ME3] Array type lookup failed for {propName} in class {className} in export {parsingEntry?.FileRef.GetEntryString(parsingEntry.UIndex)} in {parsingEntry?.FileRef.FilePath}");
+                        Debug.WriteLine($"[ME3] Array type lookup failed for {propName.Instanced} in class {className} in export {parsingEntry?.FileRef.GetEntryString(parsingEntry.UIndex)} in {parsingEntry?.FileRef.FilePath}");
                         ME3UnrealObjectInfo.ArrayTypeLookupJustFailed = false;
                     }
 #endif
@@ -268,7 +281,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
         /// <param name="containingClassOrStructName">Name of containing class or struct name</param>
         /// <param name="nonVanillaClassInfo">Dynamically built property info</param>
         /// <returns></returns>
-        public static PropertyInfo GetPropertyInfo(MEGame game, string propname, string containingClassOrStructName, ClassInfo nonVanillaClassInfo = null, ExportEntry containingExport = null, PackageCache packageCache = null)
+        public static PropertyInfo GetPropertyInfo(MEGame game, NameReference propname, string containingClassOrStructName, ClassInfo nonVanillaClassInfo = null, ExportEntry containingExport = null, PackageCache packageCache = null)
         {
             bool inStruct = false;
             PropertyInfo p = null;
@@ -344,35 +357,32 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
         /// <param name="game">Game to pull info from</param>
         /// <param name="typeName">Struct type name</param>
         /// <param name="stripTransients">Strip transients from the struct</param>
+        /// <param name="packageCache"></param>
+        /// <param name="shouldReturnClone">Return a deep copy of the struct</param>
         /// <returns></returns>
-        public static PropertyCollection getDefaultStructValue(MEGame game, string typeName, bool stripTransients, PackageCache packageCache = null)
+        public static PropertyCollection getDefaultStructValue(MEGame game, string typeName, bool stripTransients, PackageCache packageCache = null, bool shouldReturnClone = true)
         {
-            switch (game)
+            PropertyCollection props = game switch
             {
-
-                case MEGame.ME1:
-                    return ME1UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache);
-                case MEGame.ME2:
-                    return ME2UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache);
-                case MEGame.ME3:
-                case MEGame.UDK:
-                    return ME3UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache);
-                case MEGame.LE1:
-                    return LE1UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache);
-                case MEGame.LE2:
-                    return LE2UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache);
-                case MEGame.LE3:
-                    return LE3UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache);
+                MEGame.ME1 => ME1UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache),
+                MEGame.ME2 => ME2UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache),
+                MEGame.ME3 => ME3UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache),
+                MEGame.UDK => ME3UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache),
+                MEGame.LE1 => LE1UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache),
+                MEGame.LE2 => LE2UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache),
+                MEGame.LE3 => LE3UnrealObjectInfo.getDefaultStructValue(typeName, stripTransients, packageCache),
+                _ => null
+            };
+            if (shouldReturnClone && props is not null)
+            {
+                return props.DeepClone();
             }
-            return null;
+            return props;
         }
 
-        public static OrderedMultiValueDictionary<string, PropertyInfo> GetAllProperties(MEGame game, string typeName)
+        public static OrderedMultiValueDictionary<NameReference, PropertyInfo> GetAllProperties(MEGame game, string typeName)
         {
-            var props = new OrderedMultiValueDictionary<string, PropertyInfo>
-            {
-                KeyComparer = StringComparer.OrdinalIgnoreCase
-            };
+            var props = new OrderedMultiValueDictionary<NameReference, PropertyInfo>();
 
             ClassInfo info = GetClassOrStructInfo(game, typeName);
             while (info != null)
@@ -505,7 +515,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
             };
         }
 
-        public static Property getDefaultProperty(MEGame game, string propName, PropertyInfo propInfo, PackageCache packageCache, bool stripTransients = true, bool isImmutable = false)
+        public static Property getDefaultProperty(MEGame game, NameReference propName, PropertyInfo propInfo, PackageCache packageCache, bool stripTransients = true, bool isImmutable = false)
         {
             return game switch
             {

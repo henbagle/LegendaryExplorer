@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -263,7 +264,14 @@ namespace LegendaryExplorerCore.Helpers
             return src.All(compare.Contains);
         }
 
-        public static bool Remove<T>(this IList<T> list, Predicate<T> predicate)
+        /// <summary>
+        /// Removes all items that match the predicate
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <param name="predicate"></param>
+        /// <returns></returns>
+        public static bool RemoveAll<T>(this IList<T> list, Predicate<T> predicate)
         {
             bool removed = false;
             for (int i = 0; i < list.Count; i++)
@@ -277,6 +285,29 @@ namespace LegendaryExplorerCore.Helpers
             }
 
             return removed;
+        }
+
+        /// <summary>
+        /// Tries to remove an item that matches the predicate
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <param name="predicate"></param>
+        /// <param name="item"></param>
+        /// <returns></returns>
+        public static bool TryRemove<T>(this IList<T> list, Predicate<T> predicate, out T item)
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (predicate(list[i]))
+                {
+                    item = list[i];
+                    list.RemoveAt(i);
+                    return true;
+                }
+            }
+            item = default;
+            return false;
         }
 
         //IEnumerable containing everything after item
@@ -312,6 +343,9 @@ namespace LegendaryExplorerCore.Helpers
         public static void Add<T, U, V, W>(this IList<(T, U, V, W)> list, T item1, U item2, V item3, W item4) => list.Add((item1, item2, item3, item4));
 
         public static void Add<T>(this Stack<T> stack, T item) => stack.Push(item);
+
+        //This allows a partially enumerated IEnumerator to be further enumerated in a foreach
+        public static IEnumerator<T> GetEnumerator<T>(this IEnumerator<T> enumerator) => enumerator;
     }
 
     public static class DictionaryExtensions

@@ -32,7 +32,6 @@ namespace LegendaryExplorerCore.PlotDatabase
         Float = 14,
         Mod = 15,
         Category = 16
-
     }
 
     public static class PlotElementTypeExtensions
@@ -90,6 +89,7 @@ namespace LegendaryExplorerCore.PlotDatabase
 
         [JsonIgnore] public bool IsExpanded { get; set; }
 
+        [JsonIgnore]
         public string Path
         {
             get
@@ -97,7 +97,7 @@ namespace LegendaryExplorerCore.PlotDatabase
                 var path = new StringBuilder();
                 PlotElement el = this;
                 path.Insert(0, el.Label);
-                while (el.ParentElementId > 0)
+                while (el.ParentElementId > 0 && el.Parent != null)
                 {
                     el = el.Parent;
                     path.Insert(0, ".");
@@ -107,32 +107,10 @@ namespace LegendaryExplorerCore.PlotDatabase
             }
         }
 
-        public PlotElement()
-        { }
-
-        public PlotElement(int plotid, int elementid, string label, PlotElementType type, int parentelementId, List<PlotElement> children)
-        {
-            PlotId = plotid;
-            ElementId = elementid;
-            Label = label;
-            Type = type;
-            ParentElementId = parentelementId;
-            Children = children;
-        }
-
-        public PlotElement(int plotid, int elementid, string label, PlotElementType type, int parentelementId, List<PlotElement> children, PlotElement parent)
-        {
-            PlotId = plotid;
-            ElementId = elementid;
-            Label = label;
-            Type = type;
-            ParentElementId = parentelementId;
-            Children = children;
-            Parent = parent;
-        }
-
+        [JsonIgnore]
         public int RelevantId => PlotId <= 0 ? ElementId : PlotId;
 
+        [JsonIgnore]
         public bool IsAGameState
         {
             get
@@ -156,6 +134,53 @@ namespace LegendaryExplorerCore.PlotDatabase
                 }
             }
         }
+
+        public PlotElement()
+        { }
+
+        public PlotElement(int plotid, int elementid, string label, PlotElementType type, int parentelementId, List<PlotElement> children = null)
+        {
+            PlotId = plotid;
+            ElementId = elementid;
+            Label = label;
+            Type = type;
+            ParentElementId = parentelementId;
+            Children.AddRange(children ?? new List<PlotElement>());
+        }
+
+        public PlotElement(int plotid, int elementid, string label, PlotElementType type, PlotElement parent, List<PlotElement> children = null)
+            : this(plotid, elementid, label, type, -1, children)
+        {
+            AssignParent(parent);
+        }
+
+        public void AssignParent(PlotElement parent)
+        {
+            if (Parent != parent && Parent != null)
+            {
+                RemoveFromParent();
+            }
+            Parent = parent;
+            ParentElementId = parent?.ElementId ?? -1;
+            if (Parent != null && !Parent.Children.Contains(this))
+            {
+                parent?.Children.Add(this);
+            }
+        }
+
+        public bool RemoveFromParent()
+        {
+            if (Parent != null)
+            {
+                Parent.Children.RemoveAll((i) => i == this);
+                Parent = null;
+                ParentElementId = -1;
+                return true;
+            }
+
+            return false;
+        }
+
 #pragma warning disable
         public event PropertyChangedEventHandler PropertyChanged;
 #pragma warning restore
@@ -181,16 +206,8 @@ namespace LegendaryExplorerCore.PlotDatabase
 
         }
 
-        public PlotBool(int plotid, int elementid, string label, PlotElementType type, int parentelementId, List<PlotElement> children, PlotElement parent)
-        {
-            PlotId = plotid;
-            ElementId = elementid;
-            Label = label;
-            Type = type;
-            ParentElementId = parentelementId;
-            Children.AddRange(children ?? new List<PlotElement>());
-            Parent = parent;
-        }
+        public PlotBool(int plotid, int elementid, string label, PlotElementType type, PlotElement parent, List<PlotElement> children = null)
+            : base(plotid, elementid, label, type, parent, children) { }
     }
 
     public class PlotConditional : PlotElement
@@ -203,16 +220,8 @@ namespace LegendaryExplorerCore.PlotDatabase
 
         }
 
-        public PlotConditional(int plotid, int elementid, string label, PlotElementType type, int parentelementId, List<PlotElement> children, PlotElement parent)
-        {
-            PlotId = plotid;
-            ElementId = elementid;
-            Label = label;
-            Type = type;
-            ParentElementId = parentelementId;
-            Children.AddRange(children ?? new List<PlotElement>());
-            Parent = parent;
-        }
+        public PlotConditional(int plotid, int elementid, string label, PlotElementType type, PlotElement parent, List<PlotElement> children = null)
+            : base(plotid, elementid, label, type, parent, children) { }
     }
 
     public class PlotTransition : PlotElement
@@ -225,15 +234,7 @@ namespace LegendaryExplorerCore.PlotDatabase
 
         }
 
-        public PlotTransition(int plotid, int elementid, string label, PlotElementType type, int parentelementId, List<PlotElement> children, PlotElement parent)
-        {
-            PlotId = plotid;
-            ElementId = elementid;
-            Label = label;
-            Type = type;
-            ParentElementId = parentelementId;
-            Children.AddRange(children ?? new List<PlotElement>());
-            Parent = parent;
-        }
+        public PlotTransition(int plotid, int elementid, string label, PlotElementType type, PlotElement parent, List<PlotElement> children = null)
+            : base(plotid, elementid, label, type, parent, children) { }
     }
 }

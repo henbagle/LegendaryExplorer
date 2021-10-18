@@ -52,7 +52,7 @@ namespace LegendaryExplorerCore.Unreal
             PerObjectLocalized = 0x40000000,
             HasCrossLevelRefs = 0x80000000,
 
-            Inherit = Transient | Config | Localized | SafeReplace | PerObjectConfig | PerObjectLocalized | Placeable 
+            Inherit = Transient | Config | Localized | SafeReplace | PerObjectConfig | PerObjectLocalized | Placeable
                     | HasComponents | Deprecated | Intrinsic | HasInstancedProps | HasCrossLevelRefs
         }
 
@@ -149,51 +149,64 @@ namespace LegendaryExplorerCore.Unreal
         public enum EPropertyFlags : ulong
         {
             None = 0,
-            Editable = 0x0000000000000001U,
-            Const = 0x0000000000000002U,
-            Input = 0x0000000000000004U,
-            ExportObject = 0x0000000000000008U,
-            OptionalParm = 0x0000000000000010U,
-            Net = 0x0000000000000020U,
-            EditFixedSize = 0x0000000000000040U, // also EditConstArray
-            Parm = 0x0000000000000080U,
-            OutParm = 0x0000000000000100U,
-            SkipParm = 0x0000000000000200U,
-            ReturnParm = 0x0000000000000400U,
-            CoerceParm = 0x0000000000000800U,
-            Native = 0x0000000000001000U,
-            Transient = 0x0000000000002000U,
-            Config = 0x0000000000004000U,
-            Localized = 0x0000000000008000U,
-            Travel = 0x0000000000010000U,
-            EditConst = 0x0000000000020000U,
-            GlobalConfig = 0x0000000000040000U,
-            //Component = 0x0000000000080000U,
-            AlwaysInit = 0x0000000000100000U,
-            DuplicateTransient = 0x0000000000200000U,
-            NeedCtorLink = 0x0000000000400000U,
-            NoExport = 0x0000000000800000U,
-            NoImport = 0x0000000001000000U,
-            NoClear = 0x0000000002000000U,
-            Component = 0x0000000004000000U,
-            EdFindable = 0x0000000008000000U,
-            EditInlineUse = 0x0000000010000000U,
-            Deprecated = 0x0000000020000000U,
-            DataBinding = 0x0000000040000000U, // also EditInlineNotify
-            SerializeText = 0x0000000080000000U,
-            RepNotify = 0x0000000100000000U,
-            Interp = 0x0000000200000000U,
-            NonTransactional = 0x0000000400000000U,
-            EditorOnly = 0x0000000800000000U,
-            NotForConsole = 0x0000001000000000U,
-            RepRetry = 0x0000002000000000U,
-            PrivateWrite = 0x0000004000000000U,
-            ProtectedWrite = 0x0000008000000000U,
-            Archetype = 0x0000010000000000U,
-            EditHide = 0x0000020000000000U,
-            EditTextBox = 0x0000040000000000U,
-            CrossLevelPassive = 0x0000100000000000U,
-            CrossLevelActive = 0x0000200000000000U,
+            Editable =            0x0000000000000001U,
+            Const =               0x0000000000000002U,
+            Input =               0x0000000000000004U,
+            ExportObject =        0x0000000000000008U,
+            OptionalParm =        0x0000000000000010U,
+            Net =                 0x0000000000000020U,
+            EditFixedSize =       0x0000000000000040U, // also EditConstArray
+            Parm =                0x0000000000000080U,
+            OutParm =             0x0000000000000100U,
+            SkipParm =            0x0000000000000200U,
+            ReturnParm =          0x0000000000000400U,
+            CoerceParm =          0x0000000000000800U,
+            Native =              0x0000000000001000U,
+            Transient =           0x0000000000002000U,
+            Config =              0x0000000000004000U,
+            Localized =           0x0000000000008000U,
+            Travel =              0x0000000000010000U,
+            EditConst =           0x0000000000020000U,    
+            GlobalConfig =        0x0000000000040000U,
+            EditInline =          0x0000000000080000U,
+            AlwaysInit =          0x0000000000100000U,
+            DuplicateTransient =  0x0000000000200000U,
+            NeedCtorLink =        0x0000000000400000U,
+            NoExport =            0x0000000000800000U,
+            NoImport =            0x0000000001000000U,
+            NoClear =             0x0000000002000000U,
+            Component =           0x0000000004000000U,
+            EdFindable =          0x0000000008000000U,
+            EditInlineUse =       0x0000000010000000U,
+            Deprecated =          0x0000000020000000U,
+            DataBinding =         0x0000000040000000U, // also EditInlineNotify
+            SerializeText =       0x0000000080000000U,
+            RepNotify =           0x0000000100000000U,
+            Interp =              0x0000000200000000U,
+            NonTransactional =    0x0000000400000000U,
+            EditorOnly =          0x0000000800000000U,
+            NotForConsole =       0x0000001000000000U,
+            RepRetry =            0x0000002000000000U,
+            PrivateWrite =        0x0000004000000000U,
+            ProtectedWrite =      0x0000008000000000U,
+            Archetype =           0x0000010000000000U,
+            EditHide =            0x0000020000000000U,
+            EditTextBox =         0x0000040000000000U,
+            CrossLevelPassive =   0x0000100000000000U,
+            CrossLevelActive =    0x0000200000000000U,
+
+            // BioWare specific
+            RsxStorage =          0x0001000000000000U,        // Property can be moved into RSX memory on the PS3
+            UnkFlag1 =            0x0080000000000000U,
+            LoadForCooking =      0x0100000000000000U,        // property is editoronly or notforconsole but needs to be loaded during cooking
+            BioNonShip =          0x0200000000000000U,        // Property doesn't serialize to or from disk
+            BioIgnorePropertyAdd =0x0400000000000000U,        // ??????
+            SortBarrier =         0x0800000000000000U,        // Inserts a barrier between the marked property and the previous property to avoid sorting properties across. 
+            ClearCrossLevel =     0x1000000000000000U,        // Property should call BioClearCrossLevelReferences
+            BioSave =             0x2000000000000000U,        // Property should automagically synch with a save object
+            BioExpanded =         0x4000000000000000U,        // EDITOR ONLY Property should be initially expanded (arrays and structs).
+            BioAutoGrow =         0x8000000000000000U,        // EDITOR ONLY Property should auto grow the array when enter hit on last entry
+
             CrossLevel = CrossLevelPassive | CrossLevelActive,
         }
 
@@ -248,6 +261,18 @@ namespace LegendaryExplorerCore.Unreal
             [EPropertyFlags.EditTextBox] = "",
             [EPropertyFlags.CrossLevelPassive] = "",
             [EPropertyFlags.CrossLevelActive] = "",
+
+            // BIOWARE SPECIFIC
+            [EPropertyFlags.RsxStorage] = "Property can be moved into RSX memory (PS3)",
+            [EPropertyFlags.UnkFlag1] = "",
+            [EPropertyFlags.LoadForCooking] = "Property is editor only, but must be loaded during cooking",
+            [EPropertyFlags.BioNonShip] = "Property does not serialize to or from disk",
+            [EPropertyFlags.BioIgnorePropertyAdd] = "",
+            [EPropertyFlags.SortBarrier] = "BioEditor Only",
+            [EPropertyFlags.ClearCrossLevel] = "Property should call BioClearCrossLevelReferences",
+            [EPropertyFlags.BioSave] = "Property should automatically sync with a save object",
+            [EPropertyFlags.BioExpanded] = "EDITOR ONLY Property should be initially expanded",
+            [EPropertyFlags.BioAutoGrow] = "EDITOR ONLY Property should automatially grow the array when adding an item to the end",
         };
 
         [Flags]
@@ -257,6 +282,7 @@ namespace LegendaryExplorerCore.Unreal
             ClassDefaultObject = 0x0000000000000200, // this object is its class's default object
             IsCrossLevelReferenced = 0x0000000000400000, // This object has been pointed to by a cross-level reference, and therefore requires additional cleanup upon deletion
             ArchetypeObject = 0x0000000000000400, // this object is a template for another object - treat like a class default object
+            LocalizedResource = 0x0000000000080000, // Resource object is localized
             Transactional = 0x0000000100000000,   // Object is transactional.
             Unreachable = 0x0000000200000000,	// Object is not reachable on the object graph.
             Public = 0x0000000400000000,	// Object is visible outside its package.
@@ -292,7 +318,7 @@ namespace LegendaryExplorerCore.Unreal
             DebugSerialize = 0x4000000000000000,   // For debugging Serialize calls.
             DebugDestroy = 0x8000000000000000,   // For debugging Destroy calls.
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Has(this EObjectFlags enumValue, EObjectFlags flag) => (enumValue & flag) == flag;
 
@@ -412,70 +438,70 @@ namespace LegendaryExplorerCore.Unreal
         [Flags]
         public enum EProbeFunctions : ulong
         {
-            Unk0 = 1ul << 0,
-            Unk1 = 1ul << 1,
-            Unk2 = 1ul << 2,
-            Unk3 = 1ul << 3,
-            Unk4 = 1ul << 4,
-            Unk5 = 1ul << 5,
-            Unk6 = 1ul << 6,
-            Unk7 = 1ul << 7,
-            Unk8 = 1ul << 8,
-            Unk9 = 1ul << 9,
-            Unk10 = 1ul << 10,
-            Unk11 = 1ul << 11,
-            Unk12 = 1ul << 12,
-            Unk13 = 1ul << 13,
-            Unk14 = 1ul << 14,
-            Unk15 = 1ul << 15,
-            Unk16 = 1ul << 16,
-            Unk17 = 1ul << 17,
-            Unk18 = 1ul << 18,
-            Unk19 = 1ul << 19,
-            Unk20 = 1ul << 20,
-            Unk21 = 1ul << 21,
-            Unk22 = 1ul << 22,
-            Unk23 = 1ul << 23,
-            Unk24 = 1ul << 24,
-            Unk25 = 1ul << 25,
-            Unk26 = 1ul << 26,
-            Unk27 = 1ul << 27,
-            Unk28 = 1ul << 28,
-            Unk29 = 1ul << 29,
-            Unk30 = 1ul << 30,
-            Unk31 = 1ul << 31,
-            Unk32 = 1ul << 32,
-            Unk33 = 1ul << 33,
-            Unk34 = 1ul << 34,
-            Unk35 = 1ul << 35,
-            Unk36 = 1ul << 36,
-            Unk37 = 1ul << 37,
-            Unk38 = 1ul << 38,
-            Unk39 = 1ul << 39,
-            Unk40 = 1ul << 40,
-            Unk41 = 1ul << 41,
-            Unk42 = 1ul << 42,
-            Unk43 = 1ul << 43,
-            Unk44 = 1ul << 44,
-            Unk45 = 1ul << 45,
-            Unk46 = 1ul << 46,
-            Unk47 = 1ul << 47,
-            Unk48 = 1ul << 48,
-            Unk49 = 1ul << 49,
-            Unk50 = 1ul << 50,
-            Unk51 = 1ul << 51,
-            Unk52 = 1ul << 52,
-            Unk53 = 1ul << 53,
-            Unk54 = 1ul << 54,
-            Unk55 = 1ul << 55,
-            Unk56 = 1ul << 56,
-            Unk57 = 1ul << 57,
-            Unk58 = 1ul << 58,
-            Unk59 = 1ul << 59,
-            Unk60 = 1ul << 60,
-            Unk61 = 1ul << 61,
-            Unk62 = 1ul << 62,
-            Unk63 = 1ul << 63,
+            UnusedProbe0 = 1ul << 0,
+            Destroyed = 1ul << 1,
+            GainedChild = 1ul << 2,
+            LostChild = 1ul << 3,
+            UnusedProbe4 = 1ul << 4,
+            UnusedProbe5 = 1ul << 5,
+            Trigger = 1ul << 6,
+            UnTrigger = 1ul << 7,
+            Timer = 1ul << 8,
+            HitWall = 1ul << 9,
+            Falling = 1ul << 10,
+            Landed = 1ul << 11,
+            PhysicsVolumeChange = 1ul << 12,
+            Touch = 1ul << 13,
+            UnTouch = 1ul << 14,
+            Bump = 1ul << 15,
+            BeginState = 1ul << 16,
+            EndState = 1ul << 17,
+            BaseChange = 1ul << 18,
+            Attach = 1ul << 19,
+            Detach = 1ul << 20,
+            UnusedProbe21 = 1ul << 21,
+            UnusedProbe22 = 1ul << 22,
+            UnusedProbe23 = 1ul << 23,
+            UnusedProbe24 = 1ul << 24,
+            UnusedProbe25 = 1ul << 25,
+            UnusedProbe26 = 1ul << 26,
+            EncroachingOn = 1ul << 27,
+            EncroachedBy = 1ul << 28,
+            PoppedState = 1ul << 29,
+            HeadVolumeChange = 1ul << 30,
+            PostTouch = 1ul << 31,
+            PawnEnteredVolume = 1ul << 32,
+            MayFall = 1ul << 33,
+            PushedState = 1ul << 34,
+            PawnLeavingVolume = 1ul << 35,
+            Tick = 1ul << 36,
+            PlayerTick = 1ul << 37,
+            ModifyVelocity = 1ul << 38,
+            UnusedProbe39 = 1ul << 39,
+            SeePlayer = 1ul << 40,
+            EnemyNotVisible = 1ul << 41,
+            HearNoise = 1ul << 42,
+            UpdateEyeHeight = 1ul << 43,
+            SeeMonster = 1ul << 44,
+            __MISSINGPROBE = 1ul << 45,
+            SpecialHandling = 1ul << 46,
+            BotDesireability = 1ul << 47,
+            NotifyBump = 1ul << 48,
+            NotifyPhysicsVolumeChange = 1ul << 49,
+            UnusedProbe50 = 1ul << 50,
+            NotifyHeadVolumeChange = 1ul << 51,
+            NotifyLanded = 1ul << 52,
+            NotifyHitWall = 1ul << 53,
+            UnusedProbe54 = 1ul << 54,
+            PreBeginPlay = 1ul << 55,
+            UnusedProbe56 = 1ul << 56,
+            PostBeginPlay = 1ul << 57,
+            UnusedProbe58 = 1ul << 58,
+            PhysicsChangedFor = 1ul << 59,
+            ActorEnteredVolume = 1ul << 60,
+            ActorLeavingVolume = 1ul << 61,
+            UnusedProbe62 = 1ul << 62,
+            All = 1ul << 63,
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

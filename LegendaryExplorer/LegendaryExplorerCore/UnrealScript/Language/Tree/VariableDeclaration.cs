@@ -19,6 +19,8 @@ namespace LegendaryExplorerCore.UnrealScript.Language.Tree
 
         public bool IsStaticArray => ArrayLength > 1;
 
+        public bool IsTransient => Flags.Has(UnrealFlags.EPropertyFlags.Transient);
+
         public VariableDeclaration(VariableType type, UnrealFlags.EPropertyFlags flags,
                                    string name, int arrayLength = 1, string category = "None", SourcePosition start = null, SourcePosition end = null)
             : base(ASTNodeType.VariableDeclaration, start, end)
@@ -27,7 +29,7 @@ namespace LegendaryExplorerCore.UnrealScript.Language.Tree
             Name = name;
             ArrayLength = arrayLength;
             Category = category ?? "None";
-            VarType = IsStaticArray  && !(type is StaticArrayType) ? new StaticArrayType(type, ArrayLength) : type;
+            VarType = IsStaticArray && type is not StaticArrayType ? new StaticArrayType(type, ArrayLength) : type;
         }
 
         public override bool AcceptVisitor(IASTVisitor visitor)

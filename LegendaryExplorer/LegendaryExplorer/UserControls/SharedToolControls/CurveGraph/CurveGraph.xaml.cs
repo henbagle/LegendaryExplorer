@@ -18,7 +18,7 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
     /// <summary>
     /// Interaction logic for CurveGraph.xaml
     /// </summary>
-    public partial class CurveGraph : NotifyPropertyChangedControlBase
+    public partial class CurveGraph : NotifyPropertyChangedControlBase, IDisposable
     {
 
         private const int LINE_SPACING = 50;
@@ -74,14 +74,11 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
         {
             if (sender is CurveGraph c)
             {
-                foreach (var o in c.graph.Children)
+                foreach (Anchor a in c.Anchors)
                 {
-                    if (o is Anchor a)
+                    if (a.point.Value != e.NewValue as CurvePoint)
                     {
-                        if (a.point.Value != e.NewValue as CurvePoint)
-                        {
-                            a.IsSelected = false;
-                        }
+                        a.IsSelected = false;
                     }
                 }
                 c.SelectedPointChanged?.Invoke(c, new RoutedPropertyChangedEventArgs<CurvePoint>(e.OldValue as CurvePoint, e.NewValue as CurvePoint));
@@ -176,6 +173,7 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
         {
             TrackLoading = true;
             graph.Children.Clear();
+            Anchors.Clear();
 
             LinkedList<CurvePoint> points = SelectedCurve.CurvePoints;
 
@@ -245,11 +243,12 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
                 RenderYGridLine(FirstVerticalLine + (lineYSpacing * i));
             }
 
-            // Render curve
             if (ShowReferenceCurve && ComparisonCurve != null && ComparisonCurve.CurvePoints.Count > 0)
             {
-                LinkedList<CurvePoint> comparePoints = ComparisonCurve.CurvePoints;
-                RenderCurve(comparePoints, interactable: false);
+                graph.Children.Add(new StaticCurve(this, ComparisonCurve.CurvePoints, true, true)
+                {
+                    Style = FindResource("CompareCurve") as Style
+                });
             }
 
             RenderCurve(points);
@@ -286,11 +285,10 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
             graph.Children.Add(label);
         }
 
-        private void RenderCurve(LinkedList<CurvePoint> points, bool interactable = true)
+        private readonly List<Anchor> Anchors = new();
+        private void RenderCurve(LinkedList<CurvePoint> points)
         {
-            Line line;
             Anchor lastAnchor = null;
-            Style comparisonCurveStyle = FindResource("CompareCurve") as Style; // Applied to line when not interactable
 
             for (LinkedListNode<CurvePoint> node = points.First; node != null; node = node.Next)
             {
@@ -310,49 +308,43 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
                         break;
                 }
 
-                Anchor a = new Anchor(this, node);
+                var a = new Anchor(this, node);
                 if (node.Value == SelectedPoint)
                 {
                     a.IsSelected = true;
                 }
 
-                if(!interactable)
-                {
-                    // Hide anchors
-                    a.Visibility = Visibility.Hidden;
-                }
-
+                Anchors.Add(a);
                 graph.Children.Add(a);
 
+                Line line;
                 if (node.Previous == null)
                 {
                     line = new Line { X1 = -10 };
-                    line.bind(Line.Y1Property, a, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
+                    line.bind(Line.Y1Property, a, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     line.bind(Line.X2Property, a, nameof(Anchor.X));
-                    line.bind(Line.Y2Property, a, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
-                    if (!interactable) line.Style = comparisonCurveStyle;
+                    line.bind(Line.Y2Property, a, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     graph.Children.Add(line);
                 }
                 else
                 {
-                    PathBetween(lastAnchor, a, node.Previous.Value.InterpMode, (interactable ? null : comparisonCurveStyle));
+                    PathBetween(lastAnchor, a, node.Previous.Value.InterpMode);
                 }
 
                 if (node.Next == null)
                 {
                     line = new Line();
                     line.bind(Line.X1Property, a, nameof(Anchor.X));
-                    line.bind(Line.Y1Property, a, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
+                    line.bind(Line.Y1Property, a, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     line.X2 = ActualWidth + 10;
-                    line.bind(Line.Y2Property, a, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
-                    if (!interactable) line.Style = comparisonCurveStyle;
+                    line.bind(Line.Y2Property, a, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     graph.Children.Add(line);
                 }
                 lastAnchor = a;
             }
         }
 
-        private void PathBetween(Anchor a1, Anchor a2, CurveMode interpMode = CurveMode.CIM_Linear, Style styleOverride = null)
+        private void PathBetween(Anchor a1, Anchor a2, CurveMode interpMode = CurveMode.CIM_Linear)
         {
             Line line;
             switch (interpMode)
@@ -360,26 +352,23 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
                 case CurveMode.CIM_Linear:
                     line = new Line();
                     line.bind(Line.X1Property, a1, nameof(Anchor.X));
-                    line.bind(Line.Y1Property, a1, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
+                    line.bind(Line.Y1Property, a1, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     line.bind(Line.X2Property, a2, nameof(Anchor.X));
-                    line.bind(Line.Y2Property, a2, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
-                    if (styleOverride != null) line.Style = styleOverride;
+                    line.bind(Line.Y2Property, a2, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     graph.Children.Add(line);
                     break;
                 case CurveMode.CIM_Constant:
                     line = new Line();
                     line.bind(Line.X1Property, a1, nameof(Anchor.X));
-                    line.bind(Line.Y1Property, a1, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
+                    line.bind(Line.Y1Property, a1, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     line.bind(Line.X2Property, a2, nameof(Anchor.X));
-                    line.bind(Line.Y2Property, a1, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
-                    if (styleOverride != null) line.Style = styleOverride;
+                    line.bind(Line.Y2Property, a1, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     graph.Children.Add(line);
                     line = new Line();
                     line.bind(Line.X1Property, a2, nameof(Anchor.X));
-                    line.bind(Line.Y1Property, a1, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
+                    line.bind(Line.Y1Property, a1, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     line.bind(Line.X2Property, a2, nameof(Anchor.X));
-                    line.bind(Line.Y2Property, a2, nameof(Anchor.Y), new CurveEdSubtractionConverter(), ActualHeight);
-                    if (styleOverride != null) line.Style = styleOverride;
+                    line.bind(Line.Y2Property, a2, nameof(Anchor.Y), CurveEdSubtractionConverter.Instance, ActualHeight);
                     graph.Children.Add(line);
                     break;
                 case CurveMode.CIM_CurveAuto:
@@ -395,7 +384,6 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
                     bez.bind(BezierSegment.Y1Property, a1, nameof(Anchor.Y));
                     bez.bind(BezierSegment.X2Property, a2, nameof(Anchor.X));
                     bez.bind(BezierSegment.Y2Property, a2, nameof(Anchor.Y));
-                    if(styleOverride != null) bez.Style = styleOverride;
                     graph.Children.Add(bez);
                     a1.rightBez = bez;
                     a2.leftBez = bez;
@@ -423,7 +411,7 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
                 if (UseFixedTimeSpan)
                 {
                     FixedStartTime *= 1 + ((float)e.Delta / 8000);
-                    FixedEndTime *= (1 + ((float)e.Delta / 8000));
+                    FixedEndTime *= 1 + ((float)e.Delta / 8000);
                     UpdateScalingFromFixedTimeSpan();
                 }
                 else
@@ -446,14 +434,13 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
             {
                 dragging = true;
                 dragPos = e.GetPosition(graph);
-                if (Keyboard.Modifiers == ModifierKeys.Shift) Cursor = Cursors.ScrollWE;
-                else Cursor = Cursors.ScrollNS;
+                Cursor = Keyboard.Modifiers == ModifierKeys.Shift ? Cursors.ScrollWE : Cursors.ScrollNS;
             }
             else if (ReferenceEquals(e.OriginalSource, graph) && e.ChangedButton == MouseButton.Right)
             {
-                ContextMenu cm = new ContextMenu();
+                var cm = new ContextMenu();
 
-                MenuItem addKey = new MenuItem
+                var addKey = new MenuItem
                 {
                     Header = "Add Key",
                     Tag = e.GetPosition(graph)
@@ -461,7 +448,7 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
                 addKey.Click += AddKey_Click;
                 cm.Items.Add(addKey);
 
-                MenuItem addKeyZero = new MenuItem
+                var addKeyZero = new MenuItem
                 {
                     Header = "Add Key with 0 Weight",
                     Tag = e.GetPosition(graph)
@@ -469,7 +456,7 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
                 addKeyZero.Click += AddKeyAtZero_Click;
                 cm.Items.Add(addKeyZero);
 
-                MenuItem offsetKeys = new MenuItem
+                var offsetKeys = new MenuItem
                 {
                     Header = "Offset All Keys After This Point",
                     Tag = e.GetPosition(graph)
@@ -512,14 +499,22 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
 
         private void AddKey_Click(object sender, RoutedEventArgs e)
         {
-            Point pos = (Point)(sender as MenuItem).Tag;
+            var pos = (Point)((MenuItem)sender).Tag;
             double inVal = toUnrealX(pos.X);
             AddKey((float)inVal, (float)toUnrealY(ActualHeight - pos.Y));
         }
 
         private void AddKeyAtZero_Click(object sender, RoutedEventArgs e)
         {
-            Point pos = (Point)(sender as MenuItem).Tag;
+            var pos = (Point)((MenuItem)sender).Tag;
+            double inVal = toUnrealX(pos.X);
+            AddKey((float)inVal, 0);
+        }
+
+        public void AddKeyAtZero_MousePosition()
+        {
+            Point pos = Mouse.GetPosition(this);
+            if (pos.X < 0 || pos.X > ActualWidth || pos.Y < 0 || pos.Y > ActualHeight) return;
             double inVal = toUnrealX(pos.X);
             AddKey((float)inVal, 0);
         }
@@ -576,14 +571,9 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
             }
         }
 
-        private void MenuItem_Click(object sender, RoutedEventArgs e)
-        {
-            Anchor a = ((sender as MenuItem).Parent as ContextMenu).Tag as Anchor;
-        }
-
         private void FloatTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
         {
-            TextBox b = sender as TextBox;
+            var b = (TextBox)sender;
             string result;
             if (b.IsSelectionActive)
             {
@@ -602,9 +592,9 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
 
         private void PointTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            TextBox b = (TextBox)sender;
+            var b = (TextBox)sender;
             //SirCxyrtyx: doing a stack trace to resolve a circular calling situation is horrible, I know. I'm so sorry about this.
-            if (double.TryParse(b.Text, out var d) && b.IsFocused && b.IsKeyboardFocused && !FindInStack(nameof(Anchor)))
+            if (double.TryParse(b.Text, out double d) && b.IsFocused && b.IsKeyboardFocused && !FindInStack(nameof(Anchor)))
             {
                 Anchor a = graph.Children.OfType<Anchor>().FirstOrDefault(x => x.IsSelected);
                 if (a != null && b.Name == nameof(xTextBox))
@@ -632,7 +622,7 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
         /// <returns>True if FrameName is found in stack.</returns>
         private static bool FindInStack(string FrameName)
         {
-            StackTrace st = new StackTrace();
+            var st = new StackTrace();
             for (int i = 0; i < st.FrameCount; i++)
             {
                 string name = st.GetFrame(i).GetMethod().ReflectedType.FullName;
@@ -737,6 +727,24 @@ namespace LegendaryExplorer.UserControls.SharedToolControls
             }
         }
 
+        public void Dispose()
+        {
+            graph?.Children.Clear();
+            Anchors.Clear();
+        }
+    }
 
+    public static class CurveBrushes
+    {
+        public static readonly SolidColorBrush Primary;
+        public static readonly SolidColorBrush Border;
+
+        static CurveBrushes()
+        {
+            Primary = new SolidColorBrush(Color.FromRgb(0xFF, 0xC6, 0x03));
+            Primary.Freeze();
+            Border = new SolidColorBrush(Color.FromRgb(0xCC, 0x98, 0x00));
+            Border.Freeze();
+        }
     }
 }

@@ -14,12 +14,14 @@ using LegendaryExplorer.Dialogs;
 using LegendaryExplorer.Misc;
 using LegendaryExplorer.Misc.AppSettings;
 using LegendaryExplorer.SharedUI;
+using LegendaryExplorer.SharedUI.Interfaces;
 using LegendaryExplorer.SharedUI.PeregrineTreeView;
 using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorerCore.Gammtek.IO;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Misc;
 using LegendaryExplorerCore.Packages;
+using LegendaryExplorerCore.Packages.CloningImportingAndRelinking;
 using LegendaryExplorerCore.Unreal;
 using LegendaryExplorerCore.Unreal.ObjectInfo;
 
@@ -86,6 +88,18 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
 
         private HexBox BinaryInterpreter_Hexbox;
 
+        /// <summary>
+        /// The UI host that is hosting this instance of Binary Interpreter. This can be set as busy when doing things like resolving imports
+        /// </summary>
+        public IBusyUIHost HostingControl
+        {
+            get => (IBusyUIHost)GetValue(HostingControlProperty);
+            set => SetValue(HostingControlProperty, value);
+        }
+
+        public static readonly DependencyProperty HostingControlProperty = DependencyProperty.Register(
+            nameof(HostingControl), typeof(IBusyUIHost), typeof(BinaryInterpreterWPF));
+
         private string _selectedFileOffset;
         public string SelectedFileOffset
         {
@@ -106,8 +120,8 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             get => _genericEditorSetVisibility;
             set => SetProperty(ref _genericEditorSetVisibility, value);
         }
-        private readonly List<FrameworkElement> EditorSetElements = new List<FrameworkElement>();
-        public ObservableCollectionExtended<BinInterpNode> TreeViewItems { get; } = new ObservableCollectionExtended<BinInterpNode>();
+        private readonly List<FrameworkElement> EditorSetElements = new();
+        public ObservableCollectionExtended<BinInterpNode> TreeViewItems { get; } = new();
         public ObservableCollectionExtended<IndexedName> ParentNameList { get; private set; }
         public enum InterpreterMode
         {
@@ -145,12 +159,14 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         #region Commands
         public ICommand CopyOffsetCommand { get; set; }
         public ICommand OpenInPackageEditorCommand { get; set; }
+        public ICommand FindDefinitionOfImportCommand { get; set; }
 
         private void LoadCommands()
         {
             CopyOffsetCommand = new RelayCommand(CopyFileOffsetToClipboard, OffsetIsSelected);
             NavigateToEntryCommandInternal = new GenericCommand(FireNavigateCallback, CanFireNavigateCallback);
             OpenInPackageEditorCommand = new GenericCommand(OpenInPackageEditor, IsSelectedItemAnObjectRef);
+            FindDefinitionOfImportCommand = new GenericCommand(FindDefinitionOfImport, IsSelectedItemAnImportObjectRef);
         }
 
         private bool IsSelectedItemAnObjectRef()
@@ -158,9 +174,14 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             return BinaryInterpreter_TreeView.SelectedItem is BinInterpNode b && IsObjectNodeType(b);
         }
 
+        private bool IsSelectedItemAnImportObjectRef()
+        {
+            return BinaryInterpreter_TreeView.SelectedItem is BinInterpNode b && IsImportObjectNodeType(b);
+        }
+
         private void FireNavigateCallback()
         {
-            if (CurrentLoadedExport != null && NavigateToEntryCommand != null && BinaryInterpreter_TreeView.SelectedItem is BinInterpNode b && IsObjectNodeType(b.Tag))
+            if (CurrentLoadedExport != null && NavigateToEntryCommand != null && BinaryInterpreter_TreeView.SelectedItem is BinInterpNode b && IsObjectNodeType(b))
             {
                 var pos = b.GetPos();
                 var value = EndianReader.ToInt32(CurrentLoadedExport.DataReadOnly, (int)pos, CurrentLoadedExport.FileRef.Endian);
@@ -174,7 +195,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         private bool CanFireNavigateCallback()
         {
             if (NavigateToEntryCommand != null && BinaryInterpreter_TreeView.SelectedItem is BinInterpNode b &&
-                IsObjectNodeType(b.Tag))
+                IsObjectNodeType(b))
             {
                 var pos = b.GetPos();
                 var value = EndianReader.ToInt32(CurrentLoadedExport.DataReadOnly, (int)pos, CurrentLoadedExport.FileRef.Endian);
@@ -197,6 +218,49 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                     p.Activate(); //bring to front  
                 }
             }
+        }
+
+        private void FindDefinitionOfImport()
+        {
+            if (BinaryInterpreter_TreeView.SelectedItem is BinInterpNode b && IsImportObjectNodeType(b))
+            {
+                if (CurrentLoadedExport.FileRef.IsEntry(b.UIndexValue))
+                {
+                    int index = b.UIndexValue == 0 ? b.GetObjectRefValue(CurrentLoadedExport) : b.UIndexValue;
+                    var import = CurrentLoadedExport.FileRef.GetImport(index);
+                    if (HostingControl is not null)
+                    {
+                        HostingControl.IsBusy = true;
+                        HostingControl.BusyText = "Attempting to find source of import...";
+                    }
+                    Task.Run(() => EntryImporter.ResolveImport(import, clipRootLevelPackage: false)).ContinueWithOnUIThread(prevTask =>
+                    {
+                        if(HostingControl is not null) HostingControl.IsBusy = false;
+                        if (prevTask.Result is ExportEntry res)
+                        {
+                            var pwpf = new PackageEditorWindow();
+                            pwpf.Show();
+                            pwpf.LoadEntry(res);
+                            pwpf.RestoreAndBringToFront();
+                        }
+                        else
+                        {
+                            MessageBox.Show(
+                                "Could not find the export that this import references.\nHas the link or name (including parents) of this import been changed?\nDo the filenames match the BioWare naming scheme if it's a BioX file?");
+                        }
+                    });
+                }
+            }
+        }
+
+        private bool IsImportObjectNodeType(object nodeobj)
+        {
+            if (nodeobj is BinInterpNode b && IsObjectNodeType(nodeobj))
+            {
+                int index = b.UIndexValue == 0 ? b.GetObjectRefValue(CurrentLoadedExport) : b.UIndexValue;
+                return CurrentLoadedExport.FileRef.IsImport(index);
+            }
+            return false;
         }
 
         private static bool IsObjectNodeType(object nodeobj)
@@ -222,7 +286,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         }
         #endregion
 
-        public static readonly HashSet<string> ParsableBinaryClasses = new HashSet<string>
+        public static readonly HashSet<string> ParsableBinaryClasses = new()
         {
             "AnimSequence",
             "ArrayProperty",
@@ -264,6 +328,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             "ForceFeedbackWaveform",
             "FracturedStaticMesh",
             "FracturedStaticMeshComponent",
+            "Function",
             "GuidCache",
             "InteractiveFoliageComponent",
             "InterfaceProperty",
@@ -505,7 +570,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                         break;
                 }
 
-                if (CurrentLoadedExport.TemplateOwnerClassIdx is var toci && toci >= 0)
+                if (CurrentLoadedExport.TemplateOwnerClassIdx is var toci and >= 0)
                 {
                     int n = EndianReader.ToInt32(data, toci, CurrentLoadedExport.FileRef.Endian);
                     subNodes.Add(new BinInterpNode(toci, $"TemplateOwnerClass: #{n} {CurrentLoadedExport.FileRef.GetEntryString(n)}", NodeType.StructLeafObject) { Length = 4 });
@@ -571,6 +636,9 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                         break;
                     case "Const":
                         subNodes.AddRange(StartConstScan(data, ref binarystart));
+                        break;
+                    case "Function":
+                        subNodes.AddRange(StartFunctionScan(data, ref binarystart));
                         break;
                     case "GuidCache":
                         subNodes.AddRange(StartGuidCacheScan(data, ref binarystart));
@@ -738,7 +806,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                         if (!CurrentLoadedExport.HasStack)
                         {
                             isGenericScan = true;
-                            subNodes = StartGenericScan(data, ref binarystart);
+                            subNodes.AddRange(StartGenericScan(data, ref binarystart));
                         }
                         break;
                 }

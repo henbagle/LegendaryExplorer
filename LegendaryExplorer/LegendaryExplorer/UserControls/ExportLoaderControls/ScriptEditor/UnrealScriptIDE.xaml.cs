@@ -49,6 +49,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                 Document = new TextDocument(value);
                 foldingManager = FoldingManager.Install(textEditor.TextArea);
                 foldingStrategy.UpdateFoldings(foldingManager, Document);
+                Document.TextChanged += TextChanged;
             });
         }
 
@@ -101,7 +102,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                 CurrentFileLib.InitializationStatusChange += CurrentFileLibOnInitialized;
                 if (IsVisible)
                 {
-                    CurrentFileLib?.Initialize();
+                    CurrentFileLib?.InitializeAsync();
                 }
             }
             else if (CurrentFileLib?.IsInitialized == true)
@@ -115,7 +116,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                 BusyText = "Recompiling local classes";
                 if (IsVisible)
                 {
-                    CurrentFileLib?.Initialize();
+                    CurrentFileLib?.InitializeAsync();
                 }
             }
             if (!IsBusy)
@@ -167,7 +168,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
 
         private void ExportLoaderControl_Loaded(object sender, RoutedEventArgs e)
         {
-            Window window = Window.GetWindow(this);
+            var window = Window.GetWindow(this);
             if (window is { })
             {
                 window.Closed += (_, _) => UnloadFileLib();
@@ -302,7 +303,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                 FullyInitialized = false;
                 if (IsVisible)
                 {
-                    CurrentFileLib?.Initialize();
+                    CurrentFileLib?.InitializeAsync();
                 }
             }
         }
@@ -316,7 +317,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                     progressBarTimer.Start();
                 }
 
-                CurrentFileLib?.Initialize();
+                CurrentFileLib?.InitializeAsync();
             }
             else
             {
@@ -336,18 +337,39 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
             }
         }
 
-        private void CompileToBytecode(object sender, RoutedEventArgs e)
+        private void Compile_OnClick(object sender, RoutedEventArgs e)
         {
             if (ScriptText != null && CurrentLoadedExport != null)
             {
-                if (CurrentLoadedExport.ClassName != "Function")
+                if (CurrentLoadedExport.IsDefaultObject)
                 {
-                    outputListBox.ItemsSource = new[] { $"Can only compile functions right now. {(CurrentLoadedExport.IsDefaultObject ? "Defaults" : CurrentLoadedExport.ClassName)} compilation will be added in a future update." };
-                    return;
+                    (_, MessageLog log) =  UnrealScriptCompiler.CompileDefaultProperties(CurrentLoadedExport, ScriptText, CurrentFileLib);
+                    outputListBox.ItemsSource = log?.Content;
                 }
-
-                (_, MessageLog log) = UnrealScriptCompiler.CompileFunction(CurrentLoadedExport, ScriptText, CurrentFileLib);
-                outputListBox.ItemsSource = log?.Content;
+                else
+                {
+                    switch (CurrentLoadedExport.ClassName)
+                    {
+                        case "Function":
+                        {
+                            (_, MessageLog log) = UnrealScriptCompiler.CompileFunction(CurrentLoadedExport, ScriptText, CurrentFileLib);
+                            outputListBox.ItemsSource = log?.Content;
+                            break;
+                        }
+                        case "State":
+                        {
+                            (_, MessageLog log) = UnrealScriptCompiler.CompileState(CurrentLoadedExport, ScriptText, CurrentFileLib);
+                            outputListBox.ItemsSource = log?.Content;
+                            break;
+                        }
+                        default:
+                            outputListBox.ItemsSource = new[]
+                            {
+                                $"Can only compile Functions, States, and defaultproperties right now. {CurrentLoadedExport.ClassName} compilation will be added in a future update."
+                            };
+                            break;
+                    }
+                }
             }
         }
 
@@ -379,16 +401,27 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                 _definitionLinkGenerator.Reset();
                 Dispatcher.Invoke(() =>
                 {
-                    if (ast is Function && FullyInitialized && CurrentLoadedExport?.Parent is ExportEntry parentExport)
+                    if (ast is Function or State or DefaultPropertiesBlock && FullyInitialized)
                     {
                         try
                         {
-                            (ASTNode func, MessageLog log, TokenStream<string> tokens) = UnrealScriptCompiler.CompileAST(text, CurrentLoadedExport.ClassName, Pcc.Game);
+                            (ASTNode astNode, MessageLog log, TokenStream<string> tokens) = UnrealScriptCompiler.CompileAST(text, CurrentLoadedExport.ClassName, Pcc.Game, ast is DefaultPropertiesBlock);
 
-                            if (func is Function function && log.AllErrors.IsEmpty())
+                            if (log.AllErrors.IsEmpty())
                             {
                                 //compile body to ast so that symbol tokens will be associated with their definitions
-                                UnrealScriptCompiler.CompileNewFunctionBodyAST(parentExport, text, function, log, CurrentFileLib);
+                                if (astNode is Function function && CurrentLoadedExport?.Parent is ExportEntry funcParent)
+                                {
+                                    UnrealScriptCompiler.CompileNewFunctionBodyAST(funcParent, function, log, CurrentFileLib);
+                                }
+                                else if (astNode is State state && CurrentLoadedExport?.Parent is ExportEntry stateParent)
+                                {
+                                    UnrealScriptCompiler.CompileNewStateBodyAST(stateParent, state, log, CurrentFileLib);
+                                }
+                                else if (astNode is DefaultPropertiesBlock propertiesBlock && CurrentLoadedExport?.Class is ExportEntry classExport)
+                                {
+                                    UnrealScriptCompiler.CompileDefaultPropertiesAST(classExport, propertiesBlock, log, CurrentFileLib);
+                                }
                                 _definitionLinkGenerator.SetTokens(tokens);
                                 outputListBox.ItemsSource = log.Content;
                             }
@@ -401,15 +434,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
 
                     RootNode = ast;
                     ScriptText = text;
-                    if (RootNode is Function)
-                    {
-                        textEditor.IsReadOnly = false;
-                        Document.TextChanged += TextChanged;
-                    }
-                    else
-                    {
-                        textEditor.IsReadOnly = true;
-                    }
+                    textEditor.IsReadOnly = RootNode is not (Function or State or DefaultPropertiesBlock);
                 });
 
             }
@@ -422,70 +447,76 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
         private void TextChanged(object sender, EventArgs e)
         {
             bool needsTokensReset = true;
-            (ASTNode ast, MessageLog log, TokenStream<string> tokens) = UnrealScriptCompiler.CompileAST(ScriptText, CurrentLoadedExport.ClassName, Pcc.Game);
+            (ASTNode ast, MessageLog log, TokenStream<string> tokens) = UnrealScriptCompiler.CompileAST(ScriptText, CurrentLoadedExport.ClassName, Pcc.Game, CurrentLoadedExport.IsDefaultObject);
             try
             {
 
-                if (ast != null && log.AllErrors.IsEmpty())
+                if (ast != null && log.AllErrors.IsEmpty() && FullyInitialized && (ast is Function or State && CurrentLoadedExport.Parent is ExportEntry || ast is DefaultPropertiesBlock && CurrentLoadedExport.Class is ExportEntry))
                 {
-                    if (ast is Function func && FullyInitialized && CurrentLoadedExport.Parent is ExportEntry parentExport)
+                    switch (ast)
                     {
-                        (ast, _) = UnrealScriptCompiler.CompileNewFunctionBodyAST(parentExport, ScriptText, func, log, CurrentFileLib);
-
-                        //var codeBuilder = new CodeBuilderVisitor<SyntaxInfoCodeFormatter, (string, SyntaxInfo)>();
-                        //ast.AcceptVisitor(codeBuilder);
-                        //(_, SyntaxInfo syntaxInfo) = codeBuilder.GetOutput();
-
-                        _definitionLinkGenerator.SetTokens(tokens);
-                        needsTokensReset = false;
-                        var syntaxInfo = new SyntaxInfo();
-                        if (tokens.Any())
-                        {
-                            int firstLine = tokens.First().StartPos.Line - 1;
-                            int lastLine = tokens.Last().EndPos.Line - 1;
-                            //while (lastLine >= firstLine)
-                            //{
-                            //    syntaxInfo[lastLine].Clear();
-                            //    lastLine--;
-                            //}
-
-                            int currentLine = firstLine;
-                            int currentPos = 0;
-                            foreach (Token<string> token in tokens)
-                            {
-                                int tokLine = token.StartPos.Line - 1;
-                                if (tokLine > currentLine)
-                                {
-                                    currentLine = tokLine;
-                                    currentPos = 0;
-                                }
-
-                                while (syntaxInfo.Count <= currentLine + 1)
-                                {
-                                    syntaxInfo.Add(new List<SyntaxSpan>());
-                                }
-
-                                int tokStart = token.StartPos.Column;
-                                int tokEnd = token.EndPos.Column;
-                                if (tokStart > currentPos)
-                                {
-                                    syntaxInfo[currentLine].Add(new SyntaxSpan(EF.None, tokStart - currentPos));
-                                }
-
-                                syntaxInfo[currentLine].Add(new SyntaxSpan(token.SyntaxType, tokEnd - tokStart));
-                                currentPos = tokEnd;
-                            }
-                        }
-
-                        textEditor.SyntaxHighlighting = syntaxInfo;
+                        case Function func:
+                            ast = UnrealScriptCompiler.CompileNewFunctionBodyAST((ExportEntry)CurrentLoadedExport.Parent, func, log, CurrentFileLib);
+                            break;
+                        case State state:
+                            ast = UnrealScriptCompiler.CompileNewStateBodyAST((ExportEntry)CurrentLoadedExport.Parent, state, log, CurrentFileLib);
+                            break;
+                        case DefaultPropertiesBlock propertiesBlock:
+                            ast = UnrealScriptCompiler.CompileDefaultPropertiesAST((ExportEntry) CurrentLoadedExport.Class, propertiesBlock, log, CurrentFileLib);
+                            break;
+                        default:
+                            return;
                     }
+
+                    _definitionLinkGenerator.SetTokens(tokens);
+                    needsTokensReset = false;
+                    var syntaxInfo = new SyntaxInfo();
+                    if (tokens.Any())
+                    {
+                        int firstLine = tokens.First().StartPos.Line - 1;
+                        int lastLine = tokens.Last().EndPos.Line - 1;
+                        //while (lastLine >= firstLine)
+                        //{
+                        //    syntaxInfo[lastLine].Clear();
+                        //    lastLine--;
+                        //}
+
+                        int currentLine = firstLine;
+                        int currentPos = 0;
+                        foreach (Token<string> token in tokens)
+                        {
+                            int tokLine = token.StartPos.Line - 1;
+                            if (tokLine > currentLine)
+                            {
+                                currentLine = tokLine;
+                                currentPos = 0;
+                            }
+
+                            while (syntaxInfo.Count <= currentLine + 1)
+                            {
+                                syntaxInfo.Add(new List<SyntaxSpan>());
+                            }
+
+                            int tokStart = token.StartPos.Column;
+                            int tokEnd = token.EndPos.Column;
+                            if (tokStart > currentPos)
+                            {
+                                syntaxInfo[currentLine].Add(new SyntaxSpan(EF.None, tokStart - currentPos));
+                            }
+
+                            syntaxInfo[currentLine].Add(new SyntaxSpan(token.SyntaxType, tokEnd - tokStart));
+                            currentPos = tokEnd;
+                        }
+                    }
+
+                    textEditor.SyntaxHighlighting = syntaxInfo;
                 }
             }
             catch (ParseException)
             {
                 log.LogError("Parse Failed!");
             }
-            catch (Exception exception) when (!LegendaryExplorerCoreLib.IsDebug)
+            catch (Exception exception)// when (!LegendaryExplorerCoreLib.IsDebug)
             {
                 log.LogError($"Exception: {exception.Message}");
             }
@@ -495,9 +526,9 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                 {
                     _definitionLinkGenerator.Reset();
                 }
+                outputListBox.ItemsSource = log.Content;
             }
 
-            outputListBox.ItemsSource = log.Content;
         }
 
 
@@ -523,17 +554,33 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
             if (ScriptText != null)
             {
                 MessageLog log;
-                (RootNode, log, _) = UnrealScriptCompiler.CompileAST(ScriptText, CurrentLoadedExport.ClassName, Pcc.Game);
+                (RootNode, log, _) = UnrealScriptCompiler.CompileAST(ScriptText, CurrentLoadedExport.ClassName, Pcc.Game, CurrentLoadedExport.IsDefaultObject);
 
                 if (RootNode != null && log.AllErrors.IsEmpty())
                 {
-                    if (RootNode is Function func && FullyInitialized && CurrentLoadedExport.Parent is ExportEntry parentExport)
+                    if (FullyInitialized)
                     {
-                        (RootNode, _) = UnrealScriptCompiler.CompileFunctionBodyAST(parentExport, ScriptText, func, log, CurrentFileLib);
+                        if (RootNode is DefaultPropertiesBlock propBlock)
+                        {
+                            if (CurrentLoadedExport.Class is ExportEntry classExport)
+                            {
+                                RootNode = UnrealScriptCompiler.CompileDefaultPropertiesAST(classExport, propBlock, log, CurrentFileLib);
+                            }
+                        }
+                        else if (CurrentLoadedExport.Parent is ExportEntry parentExport)
+                        {
+                            RootNode = RootNode switch
+                            {
+                                Function func => UnrealScriptCompiler.CompileNewFunctionBodyAST(parentExport, func, log, CurrentFileLib),
+                                State state => UnrealScriptCompiler.CompileNewStateBodyAST(parentExport, state, log, CurrentFileLib),
+                                _ => RootNode
+                            };
+                        }
                     }
                     var codeBuilder = new CodeBuilderVisitor<SyntaxInfoCodeFormatter, (string, SyntaxInfo)>();
                     RootNode.AcceptVisitor(codeBuilder);
-                    (_, SyntaxInfo syntaxInfo) = codeBuilder.GetOutput();
+                    (string text, SyntaxInfo syntaxInfo) = codeBuilder.GetOutput();
+                    ScriptText = text;
                     textEditor.SyntaxHighlighting = syntaxInfo;
                 }
 

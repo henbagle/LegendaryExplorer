@@ -179,11 +179,6 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             }
         }
 
-        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
-        {
-            Commit();
-        }
-
         private void Commit()
         {
             if (!CurveGraph.TrackLoading)
@@ -399,18 +394,6 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
 
         }
 
-        private void Save_CanExecute(object sender, CanExecuteRoutedEventArgs e)
-        {
-            e.CanExecute = InterpCurveTracks.Count > 0;
-        }
-
-        private void Save_Executed(object sender, ExecutedRoutedEventArgs e)
-        {
-            Commit();
-            //pcc.save();
-            //MessageBox.Show("Done");
-        }
-
         public override void UnloadExport()
         {
             graph.Clear();
@@ -446,6 +429,8 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                     }
                 }
             }
+            graph.Clear();
+            graph.Dispose();
         }
 
         private void ImportFromExcel_Click(object sender, RoutedEventArgs e)
@@ -456,6 +441,54 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         private void ExportToExcel_Click(object sender, RoutedEventArgs e)
         {
             ExportCurvesToXLS();
+        }
+
+        private void ExportSingleCurveToExcel_Click(object sender, RoutedEventArgs e)
+        {
+            var curve = graph.SelectedCurve;
+            var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Curve");
+            //Setup XL
+            worksheet.Cell(1, 1).Value = "Time";
+            worksheet.Cell(1, 2).Value = curve.Name;
+            int xlrow = 1;
+            //write data to list
+            foreach (var point in curve.CurvePoints)
+            {
+                xlrow++;
+                float time = point.InVal;
+                float value = point.OutVal;
+                worksheet.Cell(xlrow, 1).Value = point.InVal;
+                worksheet.Cell(xlrow, 2).Value = point.OutVal;
+            }
+
+            CommonSaveFileDialog m = new CommonSaveFileDialog
+            {
+                Title = "Select excel output",
+                DefaultFileName = $"{CurrentLoadedExport.ObjectNameString}_{CurrentLoadedExport.UIndex}_{curve.Name}.xlsx",
+                DefaultExtension = "xlsx",
+            };
+            m.Filters.Add(new CommonFileDialogFilter("Excel Files", "*.xlsx"));
+            var owner = Window.GetWindow(this);
+            if (m.ShowDialog(owner) == CommonFileDialogResult.Ok)
+            {
+                owner.RestoreAndBringToFront();
+                try
+                {
+                    workbook.SaveAs(m.FileName);
+                    MessageBox.Show($"Curve exported to {System.IO.Path.GetFileName(m.FileName)}.");
+                }
+                catch
+                {
+                    MessageBox.Show($"Save to {System.IO.Path.GetFileName(m.FileName)} failed.\nCheck the excel file is not open.");
+                }
+            }
+        }
+
+        private void SetReferenceCurve(object sender, RoutedEventArgs e)
+        {
+            graph.ComparisonCurve = graph.SelectedCurve;
+            graph.Paint();
         }
     }
 }

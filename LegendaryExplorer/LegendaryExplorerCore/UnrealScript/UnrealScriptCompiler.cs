@@ -3,13 +3,16 @@ using System.Linq;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Packages;
 using LegendaryExplorerCore.Unreal.BinaryConverters;
+using LegendaryExplorerCore.UnrealScript.Analysis.Symbols;
 using LegendaryExplorerCore.UnrealScript.Analysis.Visitors;
 using LegendaryExplorerCore.UnrealScript.Compiling;
 using LegendaryExplorerCore.UnrealScript.Compiling.Errors;
 using LegendaryExplorerCore.UnrealScript.Decompiling;
 using LegendaryExplorerCore.UnrealScript.Language.Tree;
+using LegendaryExplorerCore.UnrealScript.Language.Util;
 using LegendaryExplorerCore.UnrealScript.Lexing;
 using LegendaryExplorerCore.UnrealScript.Parsing;
+using static LegendaryExplorerCore.UnrealScript.Utilities.Keywords;
 
 namespace LegendaryExplorerCore.UnrealScript
 {
@@ -42,94 +45,42 @@ namespace LegendaryExplorerCore.UnrealScript
             switch (export.ClassName)
             {
                 case "Class":
-                    astNode = ScriptObjectToASTConverter.ConvertClass(export.GetBinaryData<UClass>(), true, lib);
+                    astNode = ScriptObjectToASTConverter.ConvertClass(export.GetBinaryData<UClass>(packageCache), true, lib, packageCache);
                     break;
                 case "Function":
-                    astNode = ScriptObjectToASTConverter.ConvertFunction(export.GetBinaryData<UFunction>(), lib: lib);
+                    astNode = ScriptObjectToASTConverter.ConvertFunction(export.GetBinaryData<UFunction>(packageCache), lib: lib, packageCache: packageCache);
                     break;
                 case "State":
-                    astNode = ScriptObjectToASTConverter.ConvertState(export.GetBinaryData<UState>(), lib: lib);
+                    astNode = ScriptObjectToASTConverter.ConvertState(export.GetBinaryData<UState>(packageCache), lib: lib, packageCache: packageCache);
                     break;
                 case "Enum":
-                    astNode = ScriptObjectToASTConverter.ConvertEnum(export.GetBinaryData<UEnum>());
+                    astNode = ScriptObjectToASTConverter.ConvertEnum(export.GetBinaryData<UEnum>(packageCache));
                     break;
                 case "ScriptStruct":
-                    astNode = ScriptObjectToASTConverter.ConvertStruct(export.GetBinaryData<UScriptStruct>(), packageCache);
+                    astNode = ScriptObjectToASTConverter.ConvertStruct(export.GetBinaryData<UScriptStruct>(packageCache), packageCache, lib);
                     break;
                 default:
-                    if (export.ClassName.EndsWith("Property") && ObjectBinary.From(export) is UProperty uProp)
+                    if (export.ClassName.EndsWith("Property") && ObjectBinary.From(export, packageCache) is UProperty uProp)
                     {
-                        astNode = ScriptObjectToASTConverter.ConvertVariable(uProp);
+                        astNode = ScriptObjectToASTConverter.ConvertVariable(uProp, packageCache);
                     }
                     else
                     {
-                        astNode = ScriptObjectToASTConverter.ConvertDefaultProperties(export, packageCache);
+                        astNode = ScriptObjectToASTConverter.ConvertDefaultProperties(export, lib, packageCache);
                     }
-
                     break;
             }
-
             return astNode;
         }
 
-        public static (Function, TokenStream<string>) CompileFunctionBodyAST(ExportEntry parentExport, string scriptText, Function func, MessageLog log, FileLib lib)
-        {
-            var symbols = lib.GetSymbolTable();
-            symbols.RevertToObjectStack();
-
-            if (parentExport.IsClass && symbols.TryGetType(parentExport.ObjectName, out Class containingClass))
-            {
-                int funcIdx = containingClass.Functions.FindIndex(fun => fun.Name == func.Name);
-                Function originalFunction = containingClass.Functions[funcIdx];
-                originalFunction.Body = func.Body;
-                originalFunction.Body.Outer = originalFunction;
-                for (int i = 0; i < func.Parameters.Count && i < originalFunction.Parameters.Count; i++)
-                {
-                    originalFunction.Parameters[i].UnparsedDefaultParam = func.Parameters[i].UnparsedDefaultParam;
-                }
-                originalFunction.Locals.Clear();
-
-                if (!containingClass.Name.CaseInsensitiveEquals("Object"))
-                {
-                    symbols.GoDirectlyToStack(((Class)containingClass.Parent).GetInheritanceString());
-                    symbols.PushScope(containingClass.Name);
-                }
-
-                var tokens = CodeBodyParser.ParseFunction(originalFunction, parentExport.Game, scriptText, symbols, log);
-                return (originalFunction, tokens);
-            }
-            //in state
-            if (parentExport.Parent is ExportEntry {IsClass: true} classExport && symbols.TryGetType(classExport.ObjectNameString, out Class cls) &&
-                cls.States.FirstOrDefault(s => s.Name.CaseInsensitiveEquals(parentExport.ObjectNameString)) is State state &&
-                state.Functions.FirstOrDefault(f => f.Name == func.Name) is Function canonicalFunction)
-            {
-                canonicalFunction.Body = func.Body;
-                canonicalFunction.Body.Outer = canonicalFunction;
-                for (int i = 0; i < func.Parameters.Count && i < canonicalFunction.Parameters.Count; i++)
-                {
-                    canonicalFunction.Parameters[i].UnparsedDefaultParam = func.Parameters[i].UnparsedDefaultParam;
-                }
-                canonicalFunction.Locals.Clear();
-
-                symbols.GoDirectlyToStack(((Class)cls.Parent).GetInheritanceString());
-                symbols.PushScope(cls.Name);
-                symbols.PushScope(state.Name);
-
-                var tokens = CodeBodyParser.ParseFunction(canonicalFunction, parentExport.Game, scriptText, symbols, log);
-                return (canonicalFunction, tokens);
-            }
-
-            return (null, null);
-        }
-
-        public static (ASTNode ast, MessageLog log, TokenStream<string> tokens) CompileAST(string script, string type, MEGame game)
+        public static (ASTNode ast, MessageLog log, TokenStream<string> tokens) CompileAST(string script, string type, MEGame game, bool isDefaultObject = false)
         {
             var log = new MessageLog();
             var tokens = new TokenStream<string>(new StringLexer(script, log));
             var parser = new ClassOutlineParser(tokens, game, log);
             try
             {
-                ASTNode ast = parser.ParseDocument(type);
+                ASTNode ast = isDefaultObject ? parser.TryParseDefaultProperties() : parser.ParseDocument(type);
                 if (ast is null)
                 {
                     log.LogError("Parse failed!");
@@ -148,61 +99,7 @@ namespace LegendaryExplorerCore.UnrealScript
 
         }
 
-        public static (ASTNode astNode, MessageLog log) CompileFunctionBody(ExportEntry export, string scriptText, FileLib lib)
-        {
-            (ASTNode astNode, MessageLog log, _) = CompileAST(scriptText, export.ClassName, export.Game);
-            if (astNode != null && log.AllErrors.IsEmpty())
-            {
-                if (astNode is Function func && lib.IsInitialized && export.Parent is ExportEntry parent)
-                {
-                    try
-                    {
-                        (astNode, _) = CompileFunctionBodyAST(parent, scriptText, func, log, lib);
-                        if (log.AllErrors.Count > 0)
-                        {
-                            log.LogError("Parse failed!");
-                            return (astNode, log);
-                        }
-                    }
-                    catch (ParseException)
-                    {
-                        log.LogError("Parse failed!");
-                        return (astNode, log);
-                    }
-                    catch (Exception exception)
-                    {
-                        log.LogError($"Parse failed! Exception: {exception}");
-                        return (astNode, log);
-                    }
-
-                    if (astNode is Function funcFullAST)
-                    {
-                        try
-                        {
-                            var bytecodeVisitor = new ByteCodeCompilerVisitor(export.GetBinaryData<UFunction>());
-                            bytecodeVisitor.Compile(funcFullAST);
-                            if (log.AllErrors.Count == 0)
-                            {
-                                log.LogMessage("Compiled!");
-                            }
-                            else
-                            {
-                                log.LogError("Compilation failed!");
-                            }
-                            return (astNode, log);
-                        }
-                        catch (Exception exception) when(!LegendaryExplorerCoreLib.IsDebug)
-                        {
-                            log.LogError($"Compilation failed! Exception: {exception}");
-                            return (astNode, log);
-                        }
-                    }
-                }
-            }
-
-            return (null, log);
-        }
-
+        //Used by M3. Do not change signature without good cause
         public static (ASTNode astNode, MessageLog log) CompileFunction(ExportEntry export, string scriptText, FileLib lib)
         {
             (ASTNode astNode, MessageLog log, _) = CompileAST(scriptText, export.ClassName, export.Game);
@@ -217,7 +114,7 @@ namespace LegendaryExplorerCore.UnrealScript
                     }
                     try
                     {
-                        (astNode, _) = CompileNewFunctionBodyAST(parent, scriptText, func, log, lib);
+                        astNode = CompileNewFunctionBodyAST(parent, func, log, lib);
                         if (log.AllErrors.Count > 0)
                         {
                             log.LogError("Parse failed!");
@@ -255,12 +152,124 @@ namespace LegendaryExplorerCore.UnrealScript
             return (null, log);
         }
 
-        public static (Function, TokenStream<string>) CompileNewFunctionBodyAST(ExportEntry parentExport, string scriptText, Function func, MessageLog log, FileLib lib)
+        public static (ASTNode astNode, MessageLog log) CompileState(ExportEntry export, string scriptText, FileLib lib)
+        {
+            (ASTNode astNode, MessageLog log, _) = CompileAST(scriptText, export.ClassName, export.Game);
+            if (log.AllErrors.IsEmpty())
+            {
+                if (astNode is not State state)
+                {
+                    log.LogError("Tried to parse a State, but no State was found!");
+                    return (null, log);
+                }
+                if (!lib.IsInitialized)
+                {
+                    log.LogError("FileLib not initialized!");
+                    return (null, log);
+                }
+                if (export.Parent is not ExportEntry {IsClass: true} parent)
+                {
+                    log.LogError(export.InstancedFullPath + " does not have a Class Export as a parent!");
+                    return (null, log);
+                }
+
+                try
+                {
+                    astNode = CompileNewStateBodyAST(parent, state, log, lib);
+                    if (astNode is null || log.AllErrors.Count > 0)
+                    {
+                        log.LogError("Parse failed!");
+                        return (astNode, log);
+                    }
+                }
+                catch (ParseException)
+                {
+                    log.LogError("Parse failed!");
+                    return (astNode, log);
+                }
+                catch (Exception exception)
+                {
+                    log.LogError($"Parse failed! Exception: {exception}");
+                    return (astNode, log);
+                }
+                try
+                {
+                    ScriptObjectCompiler.Compile(astNode, parent, export.GetBinaryData<UState>());
+                    log.LogMessage("Compiled!");
+                    return (astNode, log);
+                }
+                catch (Exception exception) when (!LegendaryExplorerCoreLib.IsDebug)
+                {
+                    log.LogError($"Compilation failed! Exception: {exception}");
+                    return (astNode, log);
+                }
+            }
+
+            return (null, log);
+        }
+
+        public static (ASTNode astNode, MessageLog log) CompileStruct(ExportEntry export, string scriptText, FileLib lib, PackageCache packageCache = null)
+        {
+            (ASTNode astNode, MessageLog log, _) = CompileAST(scriptText, export.ClassName, export.Game);
+            if (log.AllErrors.IsEmpty())
+            {
+                if (astNode is not Struct strct)
+                {
+                    log.LogError("Tried to parse a Struct, but no Struct was found!");
+                    return (null, log);
+                }
+                if (!lib.IsInitialized)
+                {
+                    log.LogError("FileLib not initialized!");
+                    return (null, log);
+                }
+                if (export.Parent is not ExportEntry { ClassName: "Class" or "ScriptStruct" } parent)
+                {
+                    log.LogError(export.InstancedFullPath + " does not have a Class or ScriptStruct Export as a parent!");
+                    return (null, log);
+                }
+
+                try
+                {
+                    astNode = CompileNewStructAST(parent, strct, log, lib);
+                    if (astNode is null || log.AllErrors.Count > 0)
+                    {
+                        log.LogError("Parse failed!");
+                        return (astNode, log);
+                    }
+                }
+                catch (ParseException)
+                {
+                    log.LogError("Parse failed!");
+                    return (astNode, log);
+                }
+                catch (Exception exception)
+                {
+                    log.LogError($"Parse failed! Exception: {exception}");
+                    return (astNode, log);
+                }
+                try
+                {
+                    ScriptObjectCompiler.Compile(astNode, parent, export.GetBinaryData<UScriptStruct>(), packageCache);
+                    log.LogMessage("Compiled!");
+                    return (astNode, log);
+                }
+                catch (Exception exception) when (!LegendaryExplorerCoreLib.IsDebug)
+                {
+                    log.LogError($"Compilation failed! Exception: {exception}");
+                    return (astNode, log);
+                }
+            }
+
+            return (null, log);
+        }
+
+        public static State CompileNewStateBodyAST(ExportEntry parentExport, State state, MessageLog log, FileLib lib)
         {
             var symbols = lib.GetSymbolTable();
             symbols.RevertToObjectStack();
 
-            if (parentExport.IsClass && symbols.TryGetType(parentExport.ObjectName, out Class containingClass))
+            if (parentExport.IsClass && symbols.TryGetType(parentExport.ObjectName.Instanced, out Class containingClass))
             {
                 if (!containingClass.Name.CaseInsensitiveEquals("Object"))
                 {
@@ -268,58 +277,212 @@ namespace LegendaryExplorerCore.UnrealScript
                     symbols.PushScope(containingClass.Name);
                 }
 
-                int funcIdx = containingClass.Functions.FindIndex(fun => fun.Name.CaseInsensitiveEquals(func.Name));
-                if (funcIdx == -1)
+                int stateIdx = containingClass.States.FindIndex(s => s.Name.CaseInsensitiveEquals(state.Name));
+                if (stateIdx == -1)
                 {
-                    symbols.AddSymbol(func.Name, func);
-                    containingClass.Functions.Add(func);
+                    containingClass.States.Add(state);
                 }
                 else
                 {
-                    symbols.ReplaceSymbol(func.Name, func, true);
-                    containingClass.Functions[funcIdx] = func;
+                    symbols.RemoveSymbol(state.Name);
+                    containingClass.States[stateIdx] = state;
                 }
 
-                func.Outer = containingClass;
-                var validator = new ClassValidationVisitor(log, symbols, ValidationPass.ClassAndStructMembersAndFunctionParams);
-                validator.VisitNode(func);
-                validator = new ClassValidationVisitor(log, symbols, ValidationPass.BodyPass);
-                validator.VisitNode(func);
+                state.Outer = containingClass;
+                ClassValidationVisitor.RunAllPasses(state, log, symbols);
+                CodeBodyParser.ParseState(state, parentExport.Game, symbols, log);
 
-                var tokens = CodeBodyParser.ParseFunction(func, parentExport.Game, scriptText, symbols, log);
-                return (func, tokens);
+                return state;
+            }
+
+            return null;
+        }
+
+        public static Function CompileNewFunctionBodyAST(ExportEntry parentExport, Function func, MessageLog log, FileLib lib)
+        {
+            var symbols = lib.GetSymbolTable();
+            symbols.RevertToObjectStack();
+
+            IContainsFunctions stateOrClass;
+
+            if (parentExport.IsClass && symbols.TryGetType(parentExport.ObjectName.Instanced, out Class containingClass))
+            {
+                if (!containingClass.Name.CaseInsensitiveEquals("Object"))
+                {
+                    symbols.GoDirectlyToStack(((Class)containingClass.Parent).GetInheritanceString());
+                    symbols.PushScope(containingClass.Name);
+                }
+
+                stateOrClass = containingClass;
             }
             //in state
-            if (parentExport.Parent is ExportEntry { IsClass: true } classExport && symbols.TryGetType(classExport.ObjectNameString, out Class cls) &&
+            else if (parentExport.Parent is ExportEntry { IsClass: true } classExport && symbols.TryGetType(classExport.ObjectNameString, out Class cls) &&
                 cls.States.FirstOrDefault(s => s.Name.CaseInsensitiveEquals(parentExport.ObjectNameString)) is State state)
             {
                 symbols.GoDirectlyToStack(((Class)cls.Parent).GetInheritanceString());
                 symbols.PushScope(cls.Name);
                 symbols.PushScope(state.Name);
 
-                int funcIdx = state.Functions.FindIndex(fun => fun.Name.CaseInsensitiveEquals(func.Name));
-                if (funcIdx == -1)
+                stateOrClass = state;
+            }
+            else
+            {
+                return null;
+            }
+
+            int funcIdx = stateOrClass.Functions.FindIndex(fun => fun.Name.CaseInsensitiveEquals(func.Name));
+            if (funcIdx == -1)
+            {
+                symbols.AddSymbol(func.Name, func);
+                stateOrClass.Functions.Add(func);
+            }
+            else
+            {
+                symbols.ReplaceSymbol(func.Name, func, true);
+                stateOrClass.Functions[funcIdx] = func;
+            }
+
+            func.Outer = (ASTNode)stateOrClass;
+            var validator = new ClassValidationVisitor(log, symbols, ValidationPass.ClassAndStructMembersAndFunctionParams);
+            validator.VisitNode(func);
+            validator.Pass = ValidationPass.BodyPass;
+            validator.VisitNode(func);
+
+            CodeBodyParser.ParseFunction(func, parentExport.Game, symbols, log);
+            return func;
+        }
+
+        public static (ASTNode astNode, MessageLog log) CompileDefaultProperties(ExportEntry export, string scriptText, FileLib lib, PackageCache packageCache = null)
+        {
+            (ASTNode astNode, MessageLog log, _) = CompileAST(scriptText, export.ClassName, export.Game, true);
+            if (log.AllErrors.IsEmpty())
+            {
+                if (astNode is not DefaultPropertiesBlock propBlock)
                 {
-                    symbols.AddSymbol(func.Name, func);
-                    state.Functions.Add(func);
+                    log.LogError($"Tried to parse a {DEFAULTPROPERTIES}, but no {DEFAULTPROPERTIES} was found!");
+                    return (null, log);
+                }
+                if (!lib.IsInitialized)
+                {
+                    log.LogError("FileLib not initialized!");
+                    return (null, log);
+                }
+                if (export.Class is not ExportEntry { IsClass: true } classExport)
+                {
+                    log.LogError(export.InstancedFullPath + " does not have a Class Export!");
+                    return (null, log);
+                }
+
+                try
+                {
+                    astNode = CompileDefaultPropertiesAST(classExport, propBlock, log, lib);
+                    if (astNode is null || log.AllErrors.Count > 0)
+                    {
+                        log.LogError("Parse failed!");
+                        return (astNode, log);
+                    }
+                }
+                catch (ParseException)
+                {
+                    log.LogError("Parse failed!");
+                    return (astNode, log);
+                }
+                catch (Exception exception)
+                {
+                    log.LogError($"Parse failed! Exception: {exception}");
+                    return (astNode, log);
+                }
+                try
+                {
+                    ScriptPropertiesCompiler.CompileDefault__Object(propBlock, classExport, ref export, packageCache);
+                    log.LogMessage("Compiled!");
+                    return (astNode, log);
+                }
+                catch (Exception exception) when (!LegendaryExplorerCoreLib.IsDebug)
+                {
+                    log.LogError($"Compilation failed! Exception: {exception}");
+                    return (astNode, log);
+                }
+            }
+
+            return (null, log);
+        }
+
+        public static DefaultPropertiesBlock CompileDefaultPropertiesAST(ExportEntry classExport, DefaultPropertiesBlock propBlock, MessageLog log, FileLib lib)
+        {
+            SymbolTable symbols = lib.GetSymbolTable();
+            symbols.RevertToObjectStack();
+
+
+            if (classExport.IsClass && symbols.TryGetType(classExport.ObjectName.Instanced, out Class propsClass))
+            {
+                if (!propsClass.Name.CaseInsensitiveEquals("Object"))
+                {
+                    symbols.GoDirectlyToStack(((Class)propsClass.Parent).GetInheritanceString());
+                    symbols.PushScope(propsClass.Name);
+                }
+
+                propsClass.DefaultProperties = propBlock;
+                propBlock.Outer = propsClass;
+
+                PropertiesBlockParser.Parse(propBlock, classExport.FileRef, symbols, log);
+
+                return propBlock;
+            }
+
+            return null;
+        }
+
+        public static Struct CompileNewStructAST(ExportEntry parentExport, Struct strct, MessageLog log, FileLib lib)
+        {
+            var symbols = lib.GetSymbolTable();
+            symbols.RevertToObjectStack();
+            if (symbols.TryGetType(parentExport.ObjectName.Instanced, out ObjectType containingObject))
+            {
+                if (!containingObject.Name.CaseInsensitiveEquals("Object"))
+                {
+                    symbols.GoDirectlyToStack(containingObject.GetScope());
+                }
+                symbols.RemoveSymbol(strct.Name);
+                symbols.RemoveType(strct.Name);
+                foreach (VariableType innerStruct in strct.TypeDeclarations)
+                {
+                    symbols.RemoveType(innerStruct.Name);
+                }
+
+                int stateIdx = containingObject.TypeDeclarations.FindIndex(s => s is Struct && s.Name.CaseInsensitiveEquals(strct.Name));
+                if (stateIdx == -1)
+                {
+                    containingObject.TypeDeclarations.Add(strct);
                 }
                 else
                 {
-                    symbols.ReplaceSymbol(func.Name, func, true);
-                    state.Functions[funcIdx] = func;
+                    containingObject.TypeDeclarations[stateIdx] = strct;
                 }
 
-                func.Outer = state;
-                var validator = new ClassValidationVisitor(log, symbols, ValidationPass.ClassAndStructMembersAndFunctionParams);
-                validator.VisitNode(func);
-                validator = new ClassValidationVisitor(log, symbols, ValidationPass.BodyPass);
-                validator.VisitNode(func);
+                strct.Outer = containingObject;
+                ClassValidationVisitor.RunAllPasses(strct, log, symbols);
+                ParseDefaults(strct);
 
-                var tokens = CodeBodyParser.ParseFunction(func, parentExport.Game, scriptText, symbols, log);
-                return (func, tokens);
+                return strct;
+
+                void ParseDefaults(Struct s)
+                {
+                    symbols.PushScope(s.Name);
+                    foreach (Struct innerStruct in s.TypeDeclarations.OfType<Struct>())
+                    {
+                        ParseDefaults(innerStruct);
+                    }
+                    var defaults = s.DefaultProperties;
+                    if (defaults.Tokens is not null)
+                    {
+                        PropertiesBlockParser.Parse(defaults, parentExport.FileRef, symbols, log);
+                    }
+                    symbols.PopScope();
+                }
             }
 
-            return (null, null);
+            return null;
         }
     }
 }

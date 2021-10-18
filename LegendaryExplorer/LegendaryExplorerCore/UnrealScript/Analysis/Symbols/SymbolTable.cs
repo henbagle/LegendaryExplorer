@@ -519,7 +519,12 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Symbols
             ScopeNames.RemoveLast();
         }
 
-        public bool TryGetSymbol(string symbol, out ASTNode node, string outerScope)
+        public bool TryGetSymbol<T>(string symbol, out T node) where T : ASTNode
+        {
+            return TryGetSymbolInternal(symbol, out node, Scopes);
+        }
+
+        public bool TryGetSymbol<T>(string symbol, out T node, string outerScope) where T : ASTNode
         {
             return TryGetSymbolInternal(symbol, out node, Scopes) ||
                 TryGetSymbolInScopeStack(symbol, out node, outerScope);
@@ -550,7 +555,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Symbols
                     if (functionName.Contains("."))
                     {
                         var parts = functionName.Split('.');
-                        functionName = parts[parts.Length - 1];
+                        functionName = parts[^1];
                         if (parts.Length == 2 && Types.TryGetValue(parts[0], out VariableType type) && type is Class cls)
                         {
                             scope = cls.GetInheritanceString();
@@ -565,8 +570,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Symbols
                         scope = NodeUtils.GetOuterClassScope(stub.Outer);
                     }
 
-                    if (TryGetSymbol(functionName, out ASTNode funcNode, scope)
-                     && funcNode is Function func)
+                    if (TryGetSymbol(functionName, out Function func, scope))
                     {
                         delegateType.DefaultFunction = func;
                         return true;
@@ -585,7 +589,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Symbols
             return false;
         }
 
-        private VariableType InternalResolveType(VariableType stub, IObjectType containingClass)
+        private VariableType InternalResolveType(VariableType stub, ObjectType containingClass)
         {
             //first check the containing class (needed for structs that don't have globally unique names)
             if (containingClass?.TypeDeclarations.FirstOrDefault(decl => decl.Name.CaseInsensitiveEquals(stub.Name)) is VariableType typeDecl)
@@ -603,7 +607,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Symbols
 
         public bool SymbolExists(string symbol, string outerScope)
         {
-            return TryGetSymbol(symbol, out _, outerScope);
+            return TryGetSymbol<ASTNode>(symbol, out _, outerScope);
         }
 
         public bool TypeExists(VariableType type, bool globalOnly = false) => TryResolveType(ref type, globalOnly);
@@ -645,15 +649,52 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Symbols
             LinkedListNode<ASTNodeDict> it;
             for (it = stack.Last; it != null; it = it.Previous)
             {
-                if (it.Value.SecondaryScope != null && Cache.TryGetValue(it.Value.SecondaryScope, out ASTNodeDict parentScope) && parentScope.TryGetValue(symbol, out ASTNode tempNode) && tempNode is T)
+                ASTNodeDict nodeDict = it.Value;
+                if (nodeDict.TryGetValue(symbol, out ASTNode tempNode) && tempNode is T)
                 {
                     outNode = (T)tempNode;
                     return true;
                 }
-                if (it.Value.TryGetValue(symbol, out tempNode) && tempNode is T)
+
+                /*
+                SecondaryScope is an alternate chain of parents that needs to be fully searched before the standard parent chain. 
+                SecondaryScope is used for State inheritance and Struct inheritance. 
+                For Example, given: 
+
+                class A extends Object;
                 {
-                    outNode = (T)tempNode;
-                    return true;
+                    function F();
+                     
+                    state X
+                    {
+                      function F();
+                    }
+                }
+
+                class B extends A;
+                {
+                    function F();
+
+                    state X
+                    {
+                    }
+
+                    state Y extends X
+                    {
+                    }
+                }
+
+
+                B.Y's parent scope chain is B.Y -> B -> A -> Object , but its SecondaryScope chain is B.Y -> B.X -> A.X
+                The SecondaryScope must be searched first becuase if F() is called from within B.Y, it must resolve to A.X.F, not B.F 
+                */
+                while (nodeDict.SecondaryScope != null && Cache.TryGetValue(nodeDict.SecondaryScope, out nodeDict))
+                {
+                    if (nodeDict.TryGetValue(symbol, out tempNode) && tempNode is T)
+                    {
+                        outNode = (T)tempNode;
+                        return true;
+                    }
                 }
             }
             outNode = null;
@@ -670,11 +711,16 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Symbols
             return Scopes.Last().TryGetValue(symbol, out node);
         }
 
-        public bool TryGetSymbolFromSpecificScope(string symbol, out ASTNode node, string specificScope)
+        public bool TryGetSymbolFromSpecificScope<T>(string symbol, out T node, string specificScope) where T : ASTNode
         {
+            if (Cache.TryGetValue(specificScope, out ASTNodeDict scope) &&
+                scope.TryGetValue(symbol, out ASTNode astNode) && astNode is T tNode)
+            {
+                node = tNode;
+                return true;
+            }
             node = null;
-            return Cache.TryGetValue(specificScope, out ASTNodeDict scope) &&
-                   scope.TryGetValue(symbol, out node);
+            return false;
         }
 
         public void AddSymbol(string symbol, ASTNode node)
@@ -687,18 +733,29 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Symbols
             Scopes.Last()[symbol] = node;
             if (clearAssociatedScope)
             {
-                PushScope(symbol);
-
-                string scopeName = CurrentScopeName;
-                Cache.Remove(scopeName);
-                scopeName += '.';
-                foreach (string s in Cache.Keys.Where(k => k.StartsWith(scopeName, StringComparison.OrdinalIgnoreCase)).ToList())
-                {
-                    Cache.Remove(s);
-                }
-
-                PopScope();
+                ClearScope(symbol);
             }
+        }
+
+        private void ClearScope(string symbol)
+        {
+            PushScope(symbol);
+
+            string scopeName = CurrentScopeName;
+            Cache.Remove(scopeName);
+            scopeName += '.';
+            foreach (string s in Cache.Keys.Where(k => k.StartsWith(scopeName, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                Cache.Remove(s);
+            }
+
+            PopScope();
+        }
+
+        public void RemoveSymbol(string symbol)
+        {
+            ClearScope(symbol);
+            Scopes.Last().Remove(symbol);
         }
 
         public bool AddType(VariableType node)
@@ -748,6 +805,14 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Symbols
             }
 
             return true;
+        }
+
+        public void RemoveType(string name)
+        {
+            if (Types.ContainsKey(name))
+            {
+                Types.Remove(name);
+            }
         }
 
         public bool TryAddSymbol(string symbol, ASTNode node)

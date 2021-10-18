@@ -22,7 +22,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
         public uint le2ps3me2Unknown; //ME2, PS3 only and LE2
         public NameReference[] unkNameList2;//ME1/ME2
         public UIndex Defaults;
-        public UIndex[] FullFunctionsList;//ME3
+        public UIndex[] VirtualFunctionTable;//ME3
 
         protected override void Serialize(SerializingContainer2 sc)
         {
@@ -58,8 +58,30 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             sc.Serialize(ref Defaults);
             if (sc.Game is MEGame.ME3 or MEGame.UDK or MEGame.LE3)
             {
-                sc.Serialize(ref FullFunctionsList, SCExt.Serialize);
+                sc.Serialize(ref VirtualFunctionTable, SCExt.Serialize);
             }
+        }
+
+        public new static UClass Create()
+        {
+            return new()
+            {
+                SuperClass = 0,
+                Next = 0,
+                Children = 0,
+                ScriptBytes = Array.Empty<byte>(),
+                IgnoreMask = (UnrealFlags.EProbeFunctions)ulong.MaxValue,
+                LocalFunctionMap = new OrderedMultiValueDictionary<NameReference, UIndex>(),
+                OuterClass = 0,
+                ClassConfigName = "None",
+                unkNameList1 = Array.Empty<NameReference>(),
+                ComponentNameToDefaultObjectMap = new OrderedMultiValueDictionary<NameReference, UIndex>(),
+                Interfaces = new OrderedMultiValueDictionary<UIndex, UIndex>(),
+                unkName2 = "None",
+                unkNameList2 = Array.Empty<NameReference>(),
+                Defaults = 0,
+                VirtualFunctionTable = Array.Empty<UIndex>()
+            };
         }
 
         public override List<(UIndex, string)> GetUIndexes(MEGame game)
@@ -73,7 +95,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             uIndices.Add((Defaults, "Defaults"));
             if (game is MEGame.UDK or MEGame.ME3 or MEGame.LE3)
             {
-                uIndices.AddRange(FullFunctionsList.Select((u, i) => (u, $"FullFunctionsList[{i}]")));
+                uIndices.AddRange(VirtualFunctionTable.Select((u, i) => (u, $"FullFunctionsList[{i}]")));
             }
 
             return uIndices;
@@ -106,14 +128,12 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
         /// </summary>
         public void UpdateLocalFunctions()
         {
-            var children = Export.FileRef.Exports.Where(x => x.idxLink == Export.UIndex).Reverse().ToList();
             LocalFunctionMap.Clear();
-            for (int i = 0; i < children.Count; i++)
+            foreach (ExportEntry c in Export.GetChildren<ExportEntry>().Reverse())
             {
-                var c = children[i];
                 if (c.ClassName == "Function")
                 {
-                    LocalFunctionMap.Add(new KeyValuePair<NameReference, UIndex>(c.ObjectName, c.UIndex));
+                    LocalFunctionMap.Add(c.ObjectName, c.UIndex);
                 }
             }
         }

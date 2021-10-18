@@ -46,6 +46,8 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             set => Formatter.NestingLevel = value;
         }
 
+        private int LabelNest;
+
         public int ForcedAlignment
         {
             get => Formatter.ForcedAlignment;
@@ -205,6 +207,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             }
 
             Write();
+            Write("//class default properties can be edited in the Properties tab for the class's Default__ object.", EF.Comment);
             node.DefaultProperties?.AcceptVisitor(this);
 
             return true;
@@ -213,7 +216,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
 
         public bool VisitNode(VariableDeclaration node)
         {
-            if (node.Outer.Type == ASTNodeType.Class || node.Outer.Type == ASTNodeType.Struct)
+            if (node.Outer.Type is ASTNodeType.Class or ASTNodeType.Struct)
             {
                 Write(VAR, EF.Keyword);
                 if (!string.IsNullOrEmpty(node.Category) && !node.Category.CaseInsensitiveEquals("None"))
@@ -419,7 +422,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             Space();
             Append(node.Name);
             Space();
-            Append("=");
+            Append("=", EF.Operator);
             Space();
             Append(node.Value);
             Append(";");
@@ -554,6 +557,9 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
 
             if (flags.Has(EFunctionFlags.Defined) && node.Body.Statements != null)
             {
+                var tmp = LabelNest;
+                LabelNest = NestingLevel;
+
                 Write("{");
                 NestingLevel++;
                 if (node.Locals.Any())
@@ -565,6 +571,8 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                 node.Body.AcceptVisitor(this);
                 NestingLevel--;
                 Write("}");
+
+                LabelNest = tmp;
             }
             else
             {
@@ -591,7 +599,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             if (node.DefaultParameter != null)
             {
                 Space();
-                Append("=");
+                Append("=", EF.Operator);
                 Space();
                 node.DefaultParameter.AcceptVisitor(this);
             }
@@ -632,36 +640,41 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             Space();
             if (node.Parent != null)
             {
-                Append(EXTENDS);
+                Append(EXTENDS, EF.Keyword);
                 Space();
                 Append(node.Parent.Name, EF.State);
                 Space();
             }
 
+            var nestTmp = LabelNest;
+            LabelNest = NestingLevel;
+
             Write("{");
             NestingLevel++;
 
-            if (node.Ignores.Count > 0)
+            if (node.IgnoreMask != (EProbeFunctions)ulong.MaxValue)
             {
                 Write(IGNORES, EF.Keyword);
                 Space();
-                Join(node.Ignores.Select(x => x.Name).ToList(), ", ", EF.Function);
+                Join((~node.IgnoreMask).MaskToList().Select(flag => flag.ToString()).ToList(), ", ", EF.Function);
                 Write(";");
             }
 
+            Write("// State Functions", EF.Comment);
             foreach (Function func in node.Functions)
                 func.AcceptVisitor(this);
 
-
+            Write();
+            Write("// State code", EF.Comment);
             if (node.Body.Statements.Count != 0)
             {
-                Write();
-                Write("// State code", EF.Comment);
                 node.Body.AcceptVisitor(this);
             }
 
             NestingLevel--;
             Write("};");
+
+            LabelNest = nestTmp;
 
             return true;
         }
@@ -682,10 +695,6 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
         public bool VisitNode(DefaultPropertiesBlock node)
         {
             bool isStructDefaults = node.Outer is Struct;
-            if (!isStructDefaults)
-            { 
-                Write("//class default properties can be edited in the Properties tab for the class's Default__ object.", EF.Comment);
-            }
             Write(isStructDefaults ? STRUCTDEFAULTPROPERTIES : DEFAULTPROPERTIES, EF.Keyword);
             Write("{");
             NestingLevel++;
@@ -703,14 +712,14 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
         {
             Write("Begin", EF.Keyword);
             Space();
-            Append("Object", EF.Keyword);
+            Append(node.IsTemplate ? "Template" : "Object", EF.Keyword);
             Space();
             Append("Class", EF.Keyword);
-            Append("=");
+            Append("=", EF.Operator);
             Append(node.Class.Name, EF.TypeName);
             Space();
             Append(NAME, EF.Keyword);
-            Append("=");
+            Append("=", EF.Operator);
             Append(node.Name.Name);
 
             NestingLevel++;
@@ -721,7 +730,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             NestingLevel--;
             Write("End", EF.Keyword);
             Space();
-            Append("Object", EF.Keyword);
+            Append(node.IsTemplate ? "Template" : "Object", EF.Keyword);
             return true;
         }
 
@@ -1284,7 +1293,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             {
                 Append(")");
             }
-            if (node.IsClassContext && !(node.InnerSymbol is DefaultReference))
+            if (node.IsClassContext && node.InnerSymbol is not DefaultReference)
             {
                 Append(".", EF.Operator);
                 Append(STATIC, EF.Keyword);
@@ -1579,19 +1588,19 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
         }
         public bool VisitNode(StructLiteral node)
         {
-            bool multiLine = !ForceNoNewLines && (node.Statements.Count > 5 || node.Statements.Any(stmnt => (stmnt as AssignStatement)?.Value is StructLiteral || (stmnt as AssignStatement)?.Value is DynamicArrayLiteral));
+            bool multiLine = !ForceNoNewLines && (node.Statements.Count > 5 || node.Statements.Any(stmnt => (stmnt as AssignStatement)?.Value is StructLiteral or DynamicArrayLiteral));
 
             bool oldForceNoNewLines = ForceNoNewLines;
             int oldForcedAlignment = ForcedAlignment;
             if (multiLine)
             {
-                Append("{(");
+                Append("{");
                 ForceAlignment();
             }
             else
             {
                 ForceNoNewLines = true;
-                Append("(");
+                Append("{");
             }
             for (int i = 0; i < node.Statements.Count; i++)
             {
@@ -1605,13 +1614,13 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
 
             if (multiLine)
             {
-                ForcedAlignment -= 2;
-                Write(")}");
+                ForcedAlignment -= 1;
+                Write("}");
                 ForcedAlignment = oldForcedAlignment;
             }
             else
             {
-                Append(")");
+                Append("}");
                 ForceNoNewLines = oldForceNoNewLines;
             }
             return true;
@@ -1619,7 +1628,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
 
         public bool VisitNode(DynamicArrayLiteral node)
         {
-            bool multiLine = !ForceNoNewLines && (node.Values.Any(expr => expr is StructLiteral || expr is DynamicArrayLiteral) || node.Values.Count > 7);
+            bool multiLine = !ForceNoNewLines && (node.Values.Any(expr => expr is StructLiteral or DynamicArrayLiteral) || node.Values.Count > 7);
 
             bool oldForceNoNewLines = ForceNoNewLines;
             int oldForcedAlignment = ForcedAlignment;
@@ -1663,7 +1672,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
         {
             // Label
             var temp = NestingLevel;
-            NestingLevel = NestingLevel > 0 ? NestingLevel - 1 : 0;
+            NestingLevel = LabelNest;
             Write(node.Name, EF.Label);
             Append(":");
             NestingLevel = temp;
@@ -1691,6 +1700,11 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             else if (flags.Has(EPropertyFlags.Config))
             {
                 specs.Add("config");
+            }
+
+            if (flags.Has(EPropertyFlags.EditInline))
+            {
+                specs.Add(nameof(EPropertyFlags.EditInline).ToLowerInvariant());
             }
 
             if (flags.Has(EPropertyFlags.Localized))
@@ -1852,6 +1866,48 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             if (flags.Has(EPropertyFlags.CrossLevelPassive))
             {
                 specs.Add("crosslevelpassive");
+            }
+
+            //BioWare specific flags
+            if (flags.Has(EPropertyFlags.RsxStorage))
+            {
+                specs.Add("rsxstorage");
+            }
+            if (flags.Has(EPropertyFlags.UnkFlag1))
+            {
+                specs.Add(nameof(EPropertyFlags.UnkFlag1).ToLowerInvariant());
+            }
+            if (flags.Has(EPropertyFlags.LoadForCooking))
+            {
+                specs.Add("loadforcooking");
+            }
+            if (flags.Has(EPropertyFlags.BioNonShip))
+            {
+                specs.Add("biononship");
+            }
+            if (flags.Has(EPropertyFlags.BioIgnorePropertyAdd))
+            {
+                specs.Add("bioignorepropertyadd");
+            }
+            if (flags.Has(EPropertyFlags.SortBarrier))
+            {
+                specs.Add("sortbarrier");
+            }
+            if (flags.Has(EPropertyFlags.ClearCrossLevel))
+            {
+                specs.Add("clearcrosslevel");
+            }
+            if (flags.Has(EPropertyFlags.BioSave))
+            {
+                specs.Add("biosave");
+            }
+            if (flags.Has(EPropertyFlags.BioExpanded))
+            {
+                specs.Add("bioexpanded");
+            }
+            if (flags.Has(EPropertyFlags.BioAutoGrow))
+            {
+                specs.Add("bioautogrow");
             }
 
             foreach (string spec in specs)

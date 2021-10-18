@@ -615,7 +615,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 }
                 foreach (var txtref in references)
                 {
-                    if (norefsList.Contains(txtref))
+                    if (norefsList.Contains(txtref) && txtref > 0)
                     {
                         level.TextureToInstancesMap.Remove(txtref);
                     }
@@ -631,7 +631,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 }
                 foreach (int reference in references)
                 {
-                    if (!norefsList.Contains(reference))
+                    if (!norefsList.Contains(reference) || reference < 0)
                     {
                         var map = level.CachedPhysSMDataMap[reference];
                         var oldidx = map.CachedDataIndex;
@@ -654,7 +654,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 }
                 foreach (int reference in references)
                 {
-                    if (!norefsList.Contains(reference))
+                    if (!norefsList.Contains(reference) || reference < 0)
                     {
                         var map = level.CachedPhysPerTriSMDataMap[reference];
                         var oldidx = map.CachedDataIndex;
@@ -668,7 +668,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 level.CachedPhysPerTriSMDataStore = newPhysPerTristore;
                 references.Clear();
 
-                //Clean up NAV data - how to clean up Nav ints?
+                //Clean up NAV data - how to clean up Nav ints?  [Just null unwanted refs]
                 if (norefsList.Contains(level.NavListStart ?? 0))
                 {
                     level.NavListStart = 0;
@@ -679,17 +679,18 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 }
                 var newNavArray = new List<UIndex>();
                 newNavArray.AddRange(level.NavPoints);
-                foreach (var navref in level.NavPoints)
+
+                for (int n = 0; n < level.NavPoints.Count; n++)
                 {
-                    var navpoint = navref?.value ?? -1;
-                    if (norefsList.Contains(navpoint) || navpoint == 0)
+                    var navpoint = newNavArray[n].value;
+                    if (norefsList.Contains(navpoint))
                     {
-                        newNavArray.Remove(navref);
+                        newNavArray[n] = 0;
                     }
                 }
                 level.NavPoints = newNavArray;
 
-                //Clean up Coverlink Lists => pare down guid2byte? table
+                //Clean up Coverlink Lists => pare down guid2byte? table [Just null unwanted refs]
                 if (norefsList.Contains(level.CoverListStart ?? 0))
                 {
                     level.CoverListStart = 0;
@@ -700,12 +701,12 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 }
                 var newCLArray = new List<UIndex>();
                 newCLArray.AddRange(level.CoverLinks);
-                foreach (var clref in level.CoverLinks)
+                for (int l = 0; l < level.CoverLinks.Count;l++)
                 {
-                    var coverlink = clref?.value ?? -1;
-                    if (norefsList.Contains(coverlink) || coverlink == 0)
+                    var coverlink = newCLArray[l].value;
+                    if (norefsList.Contains(coverlink))
                     {
-                        newCLArray.Remove(clref);
+                        newCLArray[l] = 0;
                     }
                 }
                 level.CoverLinks = newCLArray;
@@ -872,6 +873,112 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 referenceProp.AddRange(seekfreeAssets);
                 oReferencer.WriteProperty(referenceProp);
             }
+        }
+
+        public static void ChangeClassesGlobally(PackageEditorWindow pewpf)
+        {
+
+            if (pewpf.SelectedItem.Entry.ClassName != "Class")
+            {
+                MessageBox.Show("Class that is being replaced not selected.", "Error");
+                return;
+            }
+
+            var replacement = EntrySelector.GetEntry<IEntry>(pewpf, pewpf.Pcc, "Select replacement Class reference");
+            if (replacement == null || replacement.ClassName != "Class")
+            {
+                MessageBox.Show("Invalid replacement.", "Error");
+                return;
+            }
+
+            int r = 0;
+            foreach (var exp in pewpf.Pcc.Exports)
+            {
+                if (exp.Class == pewpf.SelectedItem.Entry && !exp.IsDefaultObject)
+                {
+                    exp.Class = replacement;
+                    r++;
+                    if(exp.ObjectName.Name == pewpf.SelectedItem.Entry.ObjectName.Name)
+                    {
+                        int idx = exp.indexValue;
+                        exp.ObjectName = replacement.ObjectName.Name;
+                        exp.indexValue = idx;
+                    }
+                }
+            }
+
+            MessageBox.Show($"{r} exports had classes replaced.", "Replace Classes");
+        }
+
+        public static void ShaderDestroyer(PackageEditorWindow pewpf)
+        {
+            var dlg = MessageBox.Show("Destroy this file?", "Warning", MessageBoxButton.OKCancel);
+            if (dlg == MessageBoxResult.Cancel)
+                return;
+
+            if (pewpf.Pcc.Game != MEGame.LE3)
+                return;
+            var targetxp = pewpf.Pcc.Exports.FirstOrDefault(x => x.ClassName == "ShaderCache");
+            if(targetxp == null)
+                return;
+
+            var tgtshader = targetxp.GetBinaryData<ShaderCache>();
+            if (tgtshader == null)
+                return;
+
+            var maincachefilepath = (Path.Combine(LE3Directory.CookedPCPath, "RefShaderCache-PC-D3D-SM5.upk"));
+            IMEPackage maincachefile = MEPackageHandler.OpenMEPackage(maincachefilepath);
+            if (maincachefile == null)
+                return;
+
+            var mainshaderpcc = maincachefile.Exports.FirstOrDefault(x => x.ClassName == "ShaderCache");
+            var mainshader = mainshaderpcc.GetBinaryData<ShaderCache>();
+
+            var newTypeCRC = new OrderedMultiValueDictionary<NameReference, uint>();
+            var newVertexFact = new OrderedMultiValueDictionary<NameReference, uint>();
+
+            foreach (var kvp in tgtshader.VertexFactoryTypeCRCMap)
+            {
+                newVertexFact.Add(kvp.Key, mainshader.VertexFactoryTypeCRCMap[kvp.Key]);
+            }
+
+            foreach (var crctype in tgtshader.ShaderTypeCRCMap)
+            {
+                newTypeCRC.Add(crctype.Key, mainshader.ShaderTypeCRCMap[crctype.Key]);
+            }
+            tgtshader.ShaderTypeCRCMap.Clear();
+            tgtshader.ShaderTypeCRCMap.AddRange(newTypeCRC);
+            tgtshader.VertexFactoryTypeCRCMap.Clear();
+            tgtshader.VertexFactoryTypeCRCMap.AddRange(newVertexFact);
+            targetxp.WriteBinary(tgtshader);
+        }
+
+        public static void AddNewInterpGroups(PackageEditorWindow pewpf)
+        {
+            if(pewpf.SelectedItem.Entry.ClassName != "InterpData")
+            {
+                MessageBox.Show("InterpData not selected.", "Warning", MessageBoxButton.OK);
+                return;
+            }
+
+            if (pewpf.SelectedItem.Entry is not ExportEntry interp)
+                return;
+
+            var grpsProp = interp.GetProperty<ArrayProperty<ObjectProperty>>("InterpGroups");
+            if (grpsProp == null)
+                grpsProp = new ArrayProperty<ObjectProperty>("InterpGroups");
+
+            var childrenGrps = pewpf.Pcc.Exports.Where(x => x.idxLink == interp.UIndex);
+            foreach(var o in childrenGrps)
+            {
+                var objProp = new ObjectProperty(o);
+                if (grpsProp.Contains(objProp))
+                    continue;
+                if (o.ClassName != "InterpGroup" && o.ClassName != "InterpDirector")
+                    continue;
+                grpsProp.Add(objProp);
+            }
+            interp.WriteProperty(grpsProp);
         }
     }
 }

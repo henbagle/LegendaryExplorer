@@ -1,4 +1,5 @@
-﻿using Microsoft.Win32;
+﻿using System;
+using Microsoft.Win32;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows.Input;
@@ -63,7 +64,7 @@ namespace LegendaryExplorer.Tools.TlkManagerNS
             if (TLKList.SelectedItem is LoadedTLK { embedded: true } tlk)
             {
                 //TODO: Need to find a way for the export loader to register usage of the pcc.
-                IMEPackage pcc = MEPackageHandler.OpenME1Package(tlk.tlkPath);
+                IMEPackage pcc = MEPackageHandler.OpenMEPackage(tlk.tlkPath);
                 var export = pcc.GetUExport(tlk.exportNumber);
                 var elhw = new ExportLoaderHostedWindow(new TLKEditor(), export)
                 {
@@ -98,7 +99,9 @@ namespace LegendaryExplorer.Tools.TlkManagerNS
                         //ME1
                         loadingWorker.DoWork += delegate
                         {
-                            using IMEPackage pcc = MEPackageHandler.OpenME1Package(tlk.tlkPath);
+                            using IMEPackage pcc = MEPackageHandler.OpenMEPackage(tlk.tlkPath);
+                            if (!pcc.Game.IsGame1())
+                                throw new Exception($@"ME1/LE1 pacakges are the only ones that contain TLK exports. The selected package is for {pcc.Game}");
                             var talkfile = new ME1TalkFile(pcc, tlk.exportNumber);
                             talkfile.saveToFile(saveFileDialog.FileName);
                         };

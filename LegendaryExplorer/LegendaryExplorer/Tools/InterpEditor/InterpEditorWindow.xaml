@@ -6,12 +6,17 @@
         xmlns:bases="clr-namespace:LegendaryExplorer.SharedUI.Bases"
         xmlns:converters="clr-namespace:LegendaryExplorer.SharedUI.Converters"
         xmlns:sharedToolControls="clr-namespace:LegendaryExplorer.UserControls.SharedToolControls"
+        xmlns:interpEditorControls="clr-namespace:LegendaryExplorer.UserControls.InterpEditorControls"
         xmlns:exportLoaderControls="clr-namespace:LegendaryExplorer.UserControls.ExportLoaderControls"
         xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
         mc:Ignorable="d"
         Icon="pack://application:,,,/Tools/Icons/16x16/InterpEditor_Icon_16.ico"
         Title="Interp Editor" Height="750" Width="1300" MinWidth="900" MinHeight="200"
-        DataContext="{Binding RelativeSource={RelativeSource Self}}" Closing="WPFBase_Closing">
+        DataContext="{Binding RelativeSource={RelativeSource Self}}"
+        DragOver="Window_DragOver"
+        Drop="Window_Drop"
+        AllowDrop="True"
+        Closing="WPFBase_Closing">
     <Window.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <converters:NullEnabledConverter x:Key="NullEnabledConverter"/>
@@ -43,6 +48,8 @@
                 <MenuItem Header="Tools" Padding="4">
                     <MenuItem Header="Goto #" Command="{Binding GotoCommand}" InputGestureText="Ctrl+G" />
                 </MenuItem>
+
+                <interpEditorControls:InterpExperimentsMenuControl x:Name="InterpExperimentsMenu"  Visibility="{Binding ShowExperiments, Converter={StaticResource BoolToVisibilityConverter}}"/>
             </Menu>
             <StatusBar Height="23" DockPanel.Dock="Bottom">
                 <sharedToolControls:StatusBarGameIDIndicator

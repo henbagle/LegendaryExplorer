@@ -72,6 +72,23 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             }
         }
 
+        public static SkeletalMesh Create()
+        {
+            return new()
+            {
+                Bounds = new BoxSphereBounds(),
+                Materials = Array.Empty<UIndex>(),
+                RefSkeleton = Array.Empty<MeshBone>(),
+                LODModels = Array.Empty<StaticLODModel>(),
+                NameIndexMap = new OrderedMultiValueDictionary<NameReference, int>(),
+                PerPolyBoneKDOPs = Array.Empty<PerPolyBoneCollisionData>(),
+                BoneBreakNames = Array.Empty<string>(),
+                ClothingAssets = Array.Empty<UIndex>(),
+                unk1 = 1,
+                unkFloats = new[] { 1f, 0f, 0f, 0f }
+            };
+        }
+
         public override List<(UIndex, string)> GetUIndexes(MEGame game)
         {
             List<(UIndex t, string)> uIndexes = Materials.Select((t, i) => (t, $"Materials[{i}]")).ToList();
@@ -644,8 +661,16 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
                 sc.Serialize(ref slm.DataTypeSize);
                 int elementSize = 2;
                 sc.Serialize(ref elementSize);
-                ushort[] secondIndexBuffer = new ushort[0];
-                sc.Serialize(ref secondIndexBuffer, SCExt.Serialize);
+                if (elementSize == 4)
+                {
+                    var secondIndexBuffer = new uint[0];
+                    sc.Serialize(ref secondIndexBuffer, SCExt.Serialize);
+                }
+                else
+                {
+                    var secondIndexBuffer = new ushort[0];
+                    sc.Serialize(ref secondIndexBuffer, SCExt.Serialize);
+                }
             }
         }
         public static void Serialize(this SerializingContainer2 sc, ref PerPolyBoneCollisionData bcd)

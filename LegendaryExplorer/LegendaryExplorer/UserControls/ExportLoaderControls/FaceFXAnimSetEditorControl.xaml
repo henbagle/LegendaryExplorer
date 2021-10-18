@@ -13,6 +13,9 @@
     <exportLoaderControls:ExportLoaderControl.Resources>
         <Converters:NullVisibilityConverter x:Key="NullVisibilityConverter"/>
     </exportLoaderControls:ExportLoaderControl.Resources>
+    <exportLoaderControls:ExportLoaderControl.InputBindings>
+        <KeyBinding Command="{Binding AddKeyWithZeroWeightCommand}" Key="G" />
+    </exportLoaderControls:ExportLoaderControl.InputBindings>
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Name="linesColumnDef" Width="310"/>
@@ -72,7 +75,7 @@
                 </ListBox.Style>
             </ListBox>
             <WindowsFormsHost Grid.Row="1" Margin="0,5,0,0"  Name="treeView_WinFormsHost">
-                <forms:TreeView x:Name="treeView" MouseDoubleClick="treeView_MouseDoubleClick"/>
+                <forms:TreeView x:Name="treeView"/>
             </WindowsFormsHost>
         </Grid>
         <GridSplitter Grid.Row="1" Grid.RowSpan="2" Width="5" HorizontalAlignment="Stretch" Grid.Column="1"/>

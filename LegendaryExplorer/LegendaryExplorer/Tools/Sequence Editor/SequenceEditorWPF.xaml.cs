@@ -340,7 +340,12 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
             graphImageSub.Source = graphImage.ToBitmapImage();
             graphImageSub.Width = graphGrid.ActualWidth;
             graphImageSub.Height = graphGrid.ActualHeight;
-            expanderImageSub.Source = toolBoxExpander.DrawToBitmapSource();
+            if (toolBoxExpander.ActualHeight > 0 && toolBoxExpander.ActualWidth > 0)
+            {
+                // Do not draw if area == 0
+                expanderImageSub.Source = toolBoxExpander.DrawToBitmapSource();
+            }
+
             expanderImageSub.Width = toolBoxExpander.ActualWidth;
             expanderImageSub.Height = toolBoxExpander.ActualHeight;
             expanderImageSub.Visibility = Visibility.Visible;
@@ -810,6 +815,8 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
             }
         }
 
+        private static bool warnedOfReload = false;
+
         /// <summary>
         /// Forcibly reloads the package from disk. The package loaded in this instance will no longer be shared.
         /// </summary>
@@ -824,9 +831,19 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
                     if (warningResult != MessageBoxResult.Yes)
                         return; // Do not continue!
                 }
+
+                if (!warnedOfReload)
+                {
+                    var warningResult = MessageBox.Show(this, "Forcibly reloading a package will drop it out of tool sharing - making changes to this package in other will not be reflected in this window, and changes to this window will not be reflected in other windows. THIS MEANS SAVING WILL OVERWRITE CHANGES FROM OTHER WINDOWS. Only continue if you know what you are doing.\n\nReload anyways?", "Warning", MessageBoxButton.YesNo, MessageBoxImage.Error);
+                    if (warningResult != MessageBoxResult.Yes)
+                        return; // Do not continue!
+                    warnedOfReload = true;
+                }
+
                 var selectedIndex = (CurrentObjects_ListBox.SelectedItem as SObj)?.Export.UIndex ?? 0;
                 using var fStream = File.OpenRead(fileOnDisk);
                 LoadFileFromStream(fStream, fileOnDisk, selectedIndex);
+                Title += " (NOT SHARED WITH OTHER WINDOWS)";
             }
         }
 
@@ -865,7 +882,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
                     }
 
                     objsInNeedOfLayout.Add(obj);
-                    obj.Layout(0,0);
+                    obj.Layout(0, 0);
                     //switch (obj)
                     //{
                     //    case SEvent:
@@ -1410,6 +1427,19 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
                     }
                 }
 
+                if (contextMenu.GetChild("sequenceRefGotoMenuItem") is MenuItem sequenceRefGotoMenuItem)
+                {
+
+                    if (obj is SAction sAction && sAction.Export != null && sAction.Export.ClassName == "SequenceReference")
+                    {
+                        sequenceRefGotoMenuItem.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        sequenceRefGotoMenuItem.Visibility = Visibility.Collapsed;
+                    }
+                }
+
                 contextMenu.IsOpen = true;
                 graphEditor.DisableDragging();
             }
@@ -1790,7 +1820,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
                 //set SequenceReference's linked name indices
                 var inputIndices = new List<int>();
                 var outputIndices = new List<int>();
-                
+
                 var props = newSequence.GetProperties();
                 var inLinksProp = props.GetProp<ArrayProperty<StructProperty>>("InputLinks");
                 if (inLinksProp != null)
@@ -2079,6 +2109,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
         {
             foreach (ExportEntry exp in SequenceExports)
             {
+                // Are we trying to select a sequence?
                 if (selectSequences && export == exp)
                 {
                     if (export.ClassName == "SequenceReference")
@@ -2098,6 +2129,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
                     break;
                 }
 
+                // Get the export for the sequence we will look for objects in
                 ExportEntry sequence = exp;
                 if (sequence.ClassName == "SequenceReference")
                 {
@@ -2112,6 +2144,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
                     }
                 }
 
+                // Enumerate the objects in the sequence to see if what we are looking for is in this sequence
                 var seqObjs = sequence.GetProperty<ArrayProperty<ObjectProperty>>("SequenceObjects");
                 if (seqObjs != null && seqObjs.Any(objProp => objProp.Value == export.UIndex))
                 {
@@ -2125,7 +2158,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
 
         private void PlotEditorMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            if (CurrentObjects_ListBox.SelectedItem is SAction sAction && 
+            if (CurrentObjects_ListBox.SelectedItem is SAction sAction &&
                 sAction.Export.ClassName == "BioSeqAct_PMExecuteTransition" &&
                 sAction.Export.GetProperty<IntProperty>("m_nIndex")?.Value is int m_nIndex)
             {
@@ -2283,6 +2316,16 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
         {
             RecentsController.PropogateRecentsChange(false, newRecents);
         }
+
+        private void GotoSequenceReference_Clicked(object sender, RoutedEventArgs e)
+        {
+            if (CurrentObjects_ListBox.SelectedItem is SAction sAction &&
+                sAction.Export.ClassName == "SequenceReference")
+            {
+                GoToExport(sAction.Export); // GoToExport should probably go to the export, not the data in it
+            }
+        }
+
         public string Toolname => "SequenceEditor";
     }
     static class SequenceEditorExtensions

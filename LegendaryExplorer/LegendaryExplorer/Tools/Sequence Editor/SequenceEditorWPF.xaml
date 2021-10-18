@@ -33,6 +33,7 @@
         <converters:InverseVisibilityConverter x:Key="InverseVisibilityConverter"/>
         <converters:GameTypeConverter x:Key="GameTypeConverter"/>
         <ContextMenu x:Key="nodeContextMenu" Closed="ContextMenu_Closed">
+            <MenuItem Header="Goto sequence" Name="sequenceRefGotoMenuItem" Click="GotoSequenceReference_Clicked" />
             <MenuItem Header="Open in Package Editor" Click="OpenInPackageEditor_Clicked" />
             <MenuItem Header="Open Referenced Object in Package Editor" Click="OpenReferencedObjectInPackageEditor_Clicked" Name="openRefInPackEdMenuItem"/>
             <MenuItem Header="Open in Interp Editor" Click="OpenInInterpViewer_Clicked" Name="interpViewerMenuItem"/>
@@ -73,7 +74,6 @@
                 <MenuItem Header="File" Padding="4">
                     <MenuItem Header="_Open" Command="{Binding OpenCommand}" InputGestureText="Ctrl+O"
                                 ToolTip="Open a package file" />
-                    <MenuItem Header="Force reload package*" Command="{Binding ForceReloadPackageCommand}" sharedUi:Bindings.VisibilityToEnabled="True" InputGestureText="Ctrl+Shift+R" ToolTip="Forcibly reloads this package file, if it was loaded from disk.&#10;This operation will drop this package out of the package sharing system across tools, be careful as edits will not sync across tools!"/>
                     <MenuItem Header="_Save" Command="{Binding SaveCommand}" InputGestureText="Ctrl+S"
                               ToolTip="Save package file in-place"
                               IsEnabled="{Binding Pcc, Converter={StaticResource NullEnabledConverter}}" />
@@ -99,13 +99,18 @@
                     <MenuItem Header="Open Kismet Log (restricted to current sequence)"
                               Command="{Binding KismetLogCommand}"
                               CommandParameter="CurrentSequence"/>
-                    <MenuItem Header="Open Kismet Log for ME3" Command="{Binding KismetLogCommand}"
-                                CommandParameter="{x:Static packages:MEGame.ME3}" />
-                    <MenuItem Header="Open Kismet Log for ME2" Command="{Binding KismetLogCommand}"
-                                CommandParameter="{x:Static packages:MEGame.ME2}" />
+
+                    <Separator/>
                     <!-- TODO: Uncomment when ME1 Kismet Logger is created -->
                     <!--<MenuItem Header="Open Kismet Log for ME1" Command="{Binding KismetLogCommand}" CommandParameter="{x:Static packages:MEGame.ME1}"/>-->
+                    <MenuItem Header="Open Kismet Log for ME2" Command="{Binding KismetLogCommand}"
+                              CommandParameter="{x:Static packages:MEGame.ME2}" />
+                    <MenuItem Header="Open Kismet Log for ME3" Command="{Binding KismetLogCommand}"
+                              CommandParameter="{x:Static packages:MEGame.ME3}" />
+                    <Separator/> 
                     <MenuItem Header="Open Kismet Log for LE1" Command="{Binding KismetLogCommand}" CommandParameter="{x:Static packages:MEGame.LE1}"/>
+                    <MenuItem Header="Open Kismet Log for LE2" Command="{Binding KismetLogCommand}" CommandParameter="{x:Static packages:MEGame.LE2}"/>
+                    <MenuItem Header="Open Kismet Log for LE3" Command="{Binding KismetLogCommand}" CommandParameter="{x:Static packages:MEGame.LE3}"/>
                 </MenuItem>
 
                 <MenuItem Header="View Options" Padding="4">
@@ -136,6 +141,7 @@
                                 ToolTip="Attempt to layout sequence objects in a comprehensible fashion" />
                 </MenuItem>
                 <MenuItem Header="Experiments" Padding="4">
+                    <MenuItem Header="Force reload package*" Command="{Binding ForceReloadPackageCommand}" sharedUi:Bindings.VisibilityToEnabled="True" InputGestureText="Ctrl+Shift+R" ToolTip="Forcibly reloads this package file, if it was loaded from disk.&#10;This operation will drop this package out of the package sharing system across tools, be careful as edits will not sync across tools!"/>
                     <MenuItem Header="Scan folder for sequence object loops" Command="{Binding ScanFolderForLoopsCommand}"
                               ToolTip="Scans a folder of package files for sequence objects that have an output that leads to itself&#10;These types of loops severely harm game performance" />
                 </MenuItem>

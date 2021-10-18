@@ -28,8 +28,9 @@ using LegendaryExplorerCore.UnrealScript.Decompiling;
 using LegendaryExplorerCore.UnrealScript.Language.Tree;
 using Microsoft.WindowsAPICodePack.Dialogs;
 using Newtonsoft.Json;
-using SharpDX.Direct2D1;
+using SharpDX.D3DCompiler;
 using static LegendaryExplorerCore.Unreal.UnrealFlags;
+using Function = LegendaryExplorerCore.UnrealScript.Language.Tree.Function;
 
 namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 {
@@ -58,12 +59,130 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             }
         }
 
+        public static void PortShadowMaps(PackageEditorWindow pewpf)
+        {
+            var pcc = pewpf.Pcc;
+
+            pewpf.IsBusy = true;
+            pewpf.BusyText = $"Porting Shadow Maps from OT file.";
+            if (pcc?.Game is not MEGame.LE3)
+            {
+                MessageBox.Show("This is only designed to work on LE3 BioA_CitSam_800Finalroom.pcc!");
+                return;
+            }
+
+            string fileName = Path.GetFileName(pcc.FilePath);
+            if (!MELoadedFiles.GetFilesLoadedInGame(MEGame.ME3).TryGetValue(fileName, out string otFilePath))
+            {
+                MessageBox.Show($"Could not find ME3 version of {fileName}!");
+                return;
+            }
+            Task.Run(() =>
+            {
+                var levelExport = pcc.FindExport("TheWorld.PersistentLevel");
+                var levelBin = levelExport.GetBinaryData<Level>();
+                levelBin.TextureToInstancesMap.RemoveAll(kvp => kvp.Key.GetEntry(pcc) is ExportEntry exp && exp.ClassName.CaseInsensitiveEquals("ShadowMapTexture2D"));
+                var shadowMapsToTrash = pcc.Exports.Where(exp => exp.ClassName.CaseInsensitiveEquals("ShadowMapTexture2D")).ToList();
+                EntryPruner.TrashEntriesAndDescendants(shadowMapsToTrash);
+
+                using IMEPackage otPcc = MEPackageHandler.OpenME3Package(otFilePath);
+                var relinkMap = new Dictionary<IEntry, IEntry>();
+                foreach (UIndex uIndex in levelBin.Actors)
+                {
+                    if (uIndex.GetEntry(pcc) is ExportEntry actor)
+                    {
+                        if (actor.ClassName.CaseInsensitiveEquals("StaticMeshActor") && actor.GetProperty<ObjectProperty>("StaticMeshComponent") is ObjectProperty smcProp && smcProp.ResolveToEntry(pcc) is ExportEntry smcExp)
+                        {
+                            var otsmcExp = otPcc.FindExport(smcExp.InstancedFullPath);
+
+                            PortShadowMap(otsmcExp, smcExp);
+                        }
+                        else if (actor.ClassName.CaseInsensitiveEquals("StaticMeshCollectionActor") && actor.GetProperty<ArrayProperty<ObjectProperty>>("StaticMeshComponents") is {} smcArray)
+                        {
+                            foreach (ObjectProperty objProp in smcArray)
+                            {
+                                if (objProp.ResolveToEntry(pcc) is ExportEntry {ObjectName: {Instanced: var smcName}} smcExport && otPcc.Exports.FirstOrDefault(exp => exp.ObjectName.Instanced.CaseInsensitiveEquals(smcName)) is ExportEntry otsmcExport)
+                                {
+                                    PortShadowMap(otsmcExport, smcExport);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                var otLevelExport = otPcc.FindExport("TheWorld.PersistentLevel");
+                var otLevelTexToInst = otLevelExport.GetBinaryData<Level>().TextureToInstancesMap;
+                foreach ((UIndex key, StreamableTextureInstanceList value) in otLevelTexToInst)
+                {
+                    if (key.GetEntry(otPcc) is ExportEntry exp && exp.ClassName.CaseInsensitiveEquals("ShadowMapTexture2D"))
+                    {
+                        levelBin.TextureToInstancesMap.Add(pcc.FindExport(exp.InstancedFullPath).UIndex, value);
+                    }
+                }
+
+                levelExport.WriteBinary(levelBin);
+                levelExport.WriteProperty(otLevelExport.GetProperty<FloatProperty>("ShadowmapTotalSize"));
+
+
+                void PortShadowMap(ExportEntry otsmcExp, ExportEntry smcExp)
+                {
+                    if (otsmcExp.GetProperty<ArrayProperty<StructProperty>>("IrrelevantLights") is {} irrelevantLightsProp)
+                    {
+                        smcExp.WriteProperty(irrelevantLightsProp);
+                    }
+
+                    var otLodData = otsmcExp.GetBinaryData<StaticMeshComponent>().LODData;
+                    if (otLodData.IsEmpty())
+                    {
+                        return;
+                    }
+                    var otShadowMaps = otLodData[0].ShadowMaps;
+                    if (otShadowMaps.IsEmpty())
+                    {
+                        return;
+                    }
+
+                    var smcBin = smcExp.GetBinaryData<StaticMeshComponent>();
+                    if (smcBin.LODData.Length != 1)
+                    {
+                        Debugger.Break();
+                    }
+
+                    var shadowMaps = smcBin.LODData[0].ShadowMaps;
+                    if (shadowMaps.Length > 1)
+                    {
+                        Debugger.Break();
+                    }
+
+                    if (shadowMaps.Length == 1)
+                    {
+                        EntryPruner.TrashEntryAndDescendants(shadowMaps[0].GetEntry(pcc));
+                    }
+
+                    var results = EntryImporter.ImportAndRelinkEntries(EntryImporter.PortingOption.CloneAllDependencies,
+                        otShadowMaps[0].GetEntry(otPcc), pcc, smcExp, true, out IEntry leShadowMap, relinkMap);
+                    if (results?.Count > 0)
+                    {
+                        Debugger.Break();
+                    }
+
+                    smcBin.LODData[0].ShadowMaps = new UIndex[] {leShadowMap.UIndex};
+                    smcExp.WriteBinary(smcBin);
+                }
+            }).ContinueWithOnUIThread(prevTask =>
+            {
+                pewpf.IsBusy = false;
+                MessageBox.Show("Done!");
+            });
+        }
+
         class ClassProbeInfo
         {
             public EProbeFunctions ProbeMask;
             public HashSet<string> Functions;
         }
 
+        //Does not work!
         public static void CalculateProbeNames(PackageEditorWindow pewpf)
         {
             var game = MEGame.LE3;
@@ -85,9 +204,9 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         var info = new ClassProbeInfo
                         {
                             ProbeMask = objBin.ProbeMask,
-                            Functions = new HashSet<string>(objBin.FullFunctionsList.Length)
+                            Functions = new HashSet<string>(objBin.VirtualFunctionTable.Length)
                         };
-                        foreach (UIndex uIndex in objBin.FullFunctionsList)
+                        foreach (UIndex uIndex in objBin.VirtualFunctionTable)
                         {
                             if (pcc.GetEntry(uIndex) is IEntry entry)
                             {
@@ -551,8 +670,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         }
         public static void ScanStuff(PackageEditorWindow pewpf)
         {
-            var game = MEGame.LE3;
-            var filePaths = MELoadedFiles.GetOfficialFiles(game);//.Concat(MELoadedFiles.GetOfficialFiles(MEGame.ME2));//.Concat(MELoadedFiles.GetOfficialFiles(MEGame.ME1));
+            //var game = MEGame.LE3;
+            //var filePaths = MELoadedFiles.GetOfficialFiles(game);//.Concat(MELoadedFiles.GetOfficialFiles(MEGame.ME2));//.Concat(MELoadedFiles.GetOfficialFiles(MEGame.ME1));
             //var filePaths = MELoadedFiles.GetAllFiles(game);
             /*"Core.pcc", "Engine.pcc", "GameFramework.pcc", "GFxUI.pcc", "WwiseAudio.pcc", "SFXOnlineFoundation.pcc", "SFXGame.pcc" */
             //var filePaths = new[] { "Core.pcc", "Engine.pcc", "GameFramework.pcc", "GFxUI.pcc", "WwiseAudio.pcc", "SFXOnlineFoundation.pcc" }.Select(f => Path.Combine(ME3Directory.CookedPCPath, f));
@@ -571,30 +690,36 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
             pewpf.IsBusy = true;
             pewpf.BusyText = "Scanning";
-            Task.Run(async () =>
+            Task.Run(() =>
             {
-                //preload base files for faster scanning
-                using var baseFiles = MEPackageHandler.OpenMEPackages(EntryImporter.FilesSafeToImportFrom(game)
-                    .Select(f => Path.Combine(MEDirectories.GetCookedPath(game), f)));
-                //baseFiles.Add(MEPackageHandler.OpenMEPackage(Path.Combine(ME3Directory.CookedPCPath, "BIOP_MP_COMMON.pcc")));
-
-                foreach (string filePath in filePaths)
+                foreach (MEGame game in new[] { MEGame.LE3, MEGame.LE2, MEGame.LE1, MEGame.ME3, MEGame.ME2, MEGame.ME1})
                 {
-                    //ScanShaderCache(filePath);
-                    //ScanMaterials(filePath);
-                    //ScanStaticMeshComponents(filePath);
-                    //ScanLightComponents(filePath);
-                    //ScanLevel(filePath);
-                    //if (findClass(filePath, "ShaderCache", true)) break;
-                    //findClassesWithBinary(filePath);
-                    //await ScanScripts2(filePath);
-                    await RecompileAllFunctions(filePath);
-                    //if (interestingExports.Count > 0)
-                    //{
-                    //    break;
-                    //}
-                    //if (resolveImports(filePath)) break;
-                    if (interestingExports.Count > 50)
+                    //preload base files for faster scanning
+                    using DisposableCollection<IMEPackage> baseFiles = MEPackageHandler.OpenMEPackages(EntryImporter.FilesSafeToImportFrom(game)
+                        .Select(f => Path.Combine(MEDirectories.GetCookedPath(game), f)));
+                    using var packageCache = new PackageCache();
+                    packageCache.InsertIntoCache(baseFiles);
+                    if (game == MEGame.ME3)
+                    {
+                        baseFiles.Add(MEPackageHandler.OpenMEPackage(Path.Combine(ME3Directory.CookedPCPath, "BIOP_MP_COMMON.pcc")));
+                    }
+
+                    foreach (string filePath in EnumerateOfficialFiles(game))
+                    {
+                        //ScanShaderCache(filePath);
+                        //ScanMaterials(filePath);
+                        //ScanStaticMeshComponents(filePath);
+                        //ScanLightComponents(filePath);
+                        //ScanLevel(filePath);
+                        //if (findClass(filePath, "ShaderCache", true)) break;
+                        //findClassesWithBinary(filePath);
+                        //ScanScripts2(filePath);
+                        //RecompileAllFunctions(filePath);
+                        //RecompileAllStates(filePath);
+                        //RecompileAllDefaults(filePath, packageCache);
+                        RecompileAllStructs(filePath, packageCache);
+                    }
+                    if (interestingExports.Any())
                     {
                         break;
                     }
@@ -854,11 +979,11 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 }
             }
 
-            async Task ScanScripts2(string filePath)
+            void ScanScripts2(string filePath)
             {
                 using IMEPackage pcc = MEPackageHandler.OpenMEPackage(filePath);
                 var fileLib = new FileLib(pcc);
-                if (await fileLib.Initialize())
+                if (fileLib.Initialize())
                 {
                     foreach (ExportEntry exp in pcc.Exports.Reverse().Where(exp => exp.ClassName == "Function" && exp.Parent.ClassName == "Class" && !exp.GetBinaryData<UFunction>().FunctionFlags.Has(EFunctionFlags.Native)))
                     {
@@ -900,14 +1025,21 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 }
             }
 
-            async Task RecompileAllFunctions(string filePath)
+            void RecompileAllFunctions(string filePath)
             {
                 using IMEPackage pcc = MEPackageHandler.OpenMEPackage(filePath);
                 var fileLib = new FileLib(pcc);
-                if (await fileLib.Initialize())
+                if (fileLib.Initialize())
                 {
                     foreach (ExportEntry exp in pcc.Exports.Where(exp => exp.ClassName == "Function"))
                     {
+                        string instancedFullPath = exp.InstancedFullPath;
+                        if (foundClasses.Contains(instancedFullPath))
+                        {
+                            continue;
+                        }
+
+                        foundClasses.Add(instancedFullPath);
                         try
                         {
                             //var originalData = exp.Data;
@@ -929,6 +1061,150 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 else
                 {
                     interestingExports.Add(new EntryStringPair($"{pcc.FilePath} failed to compile!"));
+                }
+            }
+
+            void RecompileAllStates(string filePath)
+            {
+                using IMEPackage pcc = MEPackageHandler.OpenMEPackage(filePath);
+                var fileLib = new FileLib(pcc);
+
+                foreach (ExportEntry exp in pcc.Exports.Where(exp => exp.ClassName == "State"))
+                {
+                    string instancedFullPath = exp.InstancedFullPath;
+                    if (foundClasses.Contains(instancedFullPath))
+                    {
+                        continue;
+                    }
+
+                    foundClasses.Add(instancedFullPath);
+                    try
+                    {
+                        if (fileLib.Initialize())
+                        {
+                            var originalData = exp.Data;
+                            (_, string originalScript) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
+                            (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileState(exp, originalScript, fileLib);
+                            if (ast == null || log.AllErrors.Count > 0)
+                            {
+                                interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\nCompilation failed!"));
+                            }
+                            else if (!originalData.AsSpan().SequenceEqual(exp.DataReadOnly))
+                            {
+                                comparisonDict[$"{exp.UIndex} {exp.FileRef.FilePath}"] = (originalData, exp.Data);
+                                interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\nRecompilation does not match!"));
+                            }
+                        }
+                        else
+                        {
+                            interestingExports.Add(new EntryStringPair($"{pcc.FilePath} failed to compile!"));
+                            return;
+                        }
+
+                    }
+                    catch (Exception exception)
+                    {
+                        Console.WriteLine(exception);
+                        interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\n{exception}"));
+                        return;
+                    }
+                }
+            }
+
+            void RecompileAllDefaults(string filePath, PackageCache packageCache = null)
+            {
+                using IMEPackage pcc = MEPackageHandler.OpenMEPackage(filePath);
+                var fileLib = new FileLib(pcc);
+
+                foreach (ExportEntry exp in pcc.Exports.Where(exp => exp.IsDefaultObject && exp.Class is ExportEntry))
+                {
+                    string instancedFullPath = exp.InstancedFullPath;
+                    if (foundClasses.Contains(instancedFullPath))
+                    {
+                        continue;
+                    }
+
+                    foundClasses.Add(instancedFullPath);
+                    try
+                    {
+                        if (fileLib.Initialize())
+                        {
+                            (_, string script) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
+                            (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileDefaultProperties(exp, script, fileLib, packageCache);
+                            if (ast is not DefaultPropertiesBlock || log.AllErrors.Any())
+                            {
+                                interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {pcc.FilePath}\nfailed to parse defaults!"));
+                                return;
+                            }
+
+                            if (exp.EntryHasPendingChanges || exp.GetChildren().Any(entry => entry.EntryHasPendingChanges && entry.ClassName is not "ForceFeedbackWaveform") || pcc.FindEntry(UnrealPackageFile.TrashPackageName) is not null)
+                            {
+                                interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\nRecompilation does not match!"));
+                            }
+                        }
+                        else
+                        {
+                            interestingExports.Add(new EntryStringPair($"{pcc.FilePath} failed to compile!"));
+                            return;
+                        }
+
+                    }
+                    catch (Exception exception)
+                    {
+                        Console.WriteLine(exception);
+                        interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\n{exception}"));
+                        return;
+                    }
+                }
+            }
+
+            void RecompileAllStructs(string filePath, PackageCache packageCache = null)
+            {
+                using IMEPackage pcc = MEPackageHandler.OpenMEPackage(filePath);
+                var fileLib = new FileLib(pcc);
+
+                for (int i = 0; i < pcc.ExportCount; i++)
+                {
+                    ExportEntry exp = pcc.Exports[i];
+                    if (exp.ClassName is "ScriptStruct")
+                    {
+                        string instancedFullPath = exp.InstancedFullPath;
+                        if (foundClasses.Contains(instancedFullPath))
+                        {
+                            continue;
+                        }
+
+                        foundClasses.Add(instancedFullPath);
+                        try
+                        {
+                            if (fileLib.Initialize())
+                            {
+                                (_, string script) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
+                                (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileStruct(exp, script, fileLib, packageCache);
+                                if (ast is not Struct || log.AllErrors.Any())
+                                {
+                                    interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {pcc.FilePath}\nfailed to parse defaults!"));
+                                    return;
+                                }
+
+                                if (exp.EntryHasPendingChanges || exp.GetAllDescendants().Any(entry => entry.EntryHasPendingChanges))
+                                {
+                                    interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\nRecompilation does not match!"));
+                                }
+                            }
+                            else
+                            {
+                                interestingExports.Add(new EntryStringPair($"{pcc.FilePath} failed to compile!"));
+                                return;
+                            }
+                        }
+                        catch (Exception exception)
+                        {
+                            Console.WriteLine(exception);
+                            interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\n{exception}"));
+                            return;
+                        }
+                    }
                 }
             }
 
@@ -1106,7 +1382,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         string pathWithoutInvalids = Path.Combine(dlg.FileName,
                             $"{shaderType.GetPathWithoutInvalids()} - {shader.Guid}.txt");
                         File.WriteAllText(pathWithoutInvalids,
-                            SharpDX.D3DCompiler.ShaderBytecode.FromStream(new MemoryStream(shader.ShaderByteCode))
+                            ShaderBytecode.FromStream(new MemoryStream(shader.ShaderByteCode))
                                 .Disassemble());
                     }
 
@@ -1561,7 +1837,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
         public static void DumpSound(PackageEditorWindow packEd)
         {
-            if (InputComboBoxDialog.GetValue(packEd, "Choose game:", "Game to dump sound for", new[] { "ME3", "ME2" }, "ME3") is string gameStr &&
+            if (InputComboBoxDialog.GetValue(packEd, "Choose game:", "Game to dump sound for", new[] { "ME3", "ME2", "LE3", "LE2" }, "LE3") is string gameStr &&
                 Enum.TryParse(gameStr, out MEGame game))
             {
                 string tag = PromptDialog.Prompt(packEd, "Character tag:", defaultValue: "player_f", selectText: true);
@@ -1596,18 +1872,15 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                     foreach (string filePath in filePaths)
                     {
                         using IMEPackage pcc = MEPackageHandler.OpenMEPackage(filePath);
-                        if (game is MEGame.ME3 or MEGame.ME2)
+                        foreach (ExportEntry export in pcc.Exports.Where(exp => exp.ClassName == "WwiseStream"))
                         {
-                            foreach (ExportEntry export in pcc.Exports.Where(exp => exp.ClassName == "WwiseStream"))
+                            if (export.ObjectNameString.Split(',') is string[] { Length: > 1 } parts && parts[0] == "en-us" && parts[1] == tag)
                             {
-                                if (export.ObjectNameString.Split(',') is string[] { Length: > 1 } parts && parts[0] == "en-us" && parts[1] == tag)
-                                {
-                                    string fileName = Path.Combine(outFolder, $"{export.ObjectNameString}.wav");
-                                    using var fs = new FileStream(fileName, FileMode.Create);
-                                    Stream wavStream = export.GetBinaryData<WwiseStream>().CreateWaveStream();
-                                    wavStream.SeekBegin();
-                                    wavStream.CopyTo(fs);
-                                }
+                                string fileName = Path.Combine(outFolder, $"{export.ObjectNameString}.wav");
+                                using var fs = new FileStream(fileName, FileMode.Create);
+                                Stream wavStream = export.GetBinaryData<WwiseStream>().CreateWaveStream();
+                                wavStream.SeekBegin();
+                                wavStream.CopyTo(fs);
                             }
                         }
                     }
@@ -1731,5 +2004,86 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             });
         }
 
+
+        public static void RecompileAll(PackageEditorWindow pew)
+        {
+            if (pew.Pcc is { Platform: MEPackage.GamePlatform.PC } && pew.Pcc.Game != MEGame.UDK)
+            {
+                var exportsWithDecompilationErrors = new List<EntryStringPair>();
+                var fileLib = new FileLib(pew.Pcc);
+                if (!fileLib.Initialize())
+                {
+                    exportsWithDecompilationErrors.Add(new EntryStringPair("Filelib failed to initialize!"));
+                }
+                for (int i = 0; i < pew.Pcc.ExportCount; i++)
+                {
+                    ExportEntry export = pew.Pcc.Exports[i];
+                    if (export.ClassName is "ScriptStruct")
+                    {
+                        try
+                        {
+                            (_, string script) = UnrealScriptCompiler.DecompileExport(export, fileLib);
+                            (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileStruct(export, script, fileLib);
+                            if (ast is not Struct s || log.AllErrors.Any())
+                            {
+                                throw new Exception();
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            exportsWithDecompilationErrors.Add(new EntryStringPair(export, "Compilation Error!"));
+                            break;
+                        }
+                    }
+                }
+                //foreach (ExportEntry export in pew.Pcc.Exports.Where(exp => exp.IsClass))
+                //{
+                //    try
+                //    {
+                //        (_, string script) = UnrealScriptCompiler.DecompileExport(export, fileLib);
+                //        (ASTNode ast, MessageLog log, _) = UnrealScriptCompiler.CompileAST(script, export.ClassName, export.Game);
+                //        if (ast is not Class c|| log.AllErrors.Any())
+                //        {
+                //            throw new Exception();
+                //        }
+
+                //        //foreach (State state in c.States)
+                //        //{
+                //        //    ast = UnrealScriptCompiler.CompileNewStateBodyAST(export, state, log, fileLib);
+                //        //    if (ast is not State || log.AllErrors.Any())
+                //        //    {
+                //        //        throw new Exception();
+                //        //    }
+                //        //}
+
+                //        //foreach (Function function in c.Functions)
+                //        //{
+                //        //    ast = UnrealScriptCompiler.CompileNewFunctionBodyAST(export, function, log, fileLib);
+                //        //    if (ast is not Function || log.AllErrors.Any())
+                //        //    {
+                //        //        throw new Exception();
+                //        //    }
+                //        //}
+
+                //        ast = UnrealScriptCompiler.CompileDefaultPropertiesAST(export, c.DefaultProperties, log, fileLib);
+                //        if (ast is not DefaultPropertiesBlock || log.AllErrors.Any())
+                //        {
+                //            throw new Exception();
+                //        }
+                //    }
+                //    catch (Exception e)
+                //    {
+                //        exportsWithDecompilationErrors.Add(new EntryStringPair(export, "Compilation Error!"));
+                //        break;
+                //    }
+                //}
+
+                var dlg = new ListDialog(exportsWithDecompilationErrors, "Compilation errors", "", pew)
+                {
+                    DoubleClickEntryHandler = pew.GetEntryDoubleClickAction()
+                };
+                dlg.Show();
+            }
+        }
     }
 }

@@ -8,6 +8,7 @@ using System.Windows.Input;
 using ClosedXML.Excel;
 using LegendaryExplorer.Misc;
 using LegendaryExplorer.Dialogs;
+using LegendaryExplorer.SharedUI;
 using LegendaryExplorer.UserControls.SharedToolControls.Curves;
 using LegendaryExplorer.Tools.TlkManagerNS;
 using LegendaryExplorerCore.Helpers;
@@ -59,6 +60,12 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         {
             InitializeComponent();
             DataContext = this;
+            if (treeView_WinFormsHost is {Child: { }})
+            {
+                treeView_WinFormsHost.Child.MouseDoubleClick += treeView_MouseDoubleClick;
+            }
+
+            AddKeyWithZeroWeightCommand = new GenericCommand(() => graph.AddKeyAtZero_MousePosition());
         }
 
         public IFaceFXBinary FaceFX;
@@ -105,10 +112,11 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                 graph.Paint();
             }
         }
-
+        
+        public ICommand AddKeyWithZeroWeightCommand { get; set; }
         #region ExportLoaderControl
 
-        public override bool CanParse(ExportEntry exportEntry) => exportEntry.ClassName == "FaceFXAnimSet" || (exportEntry.ClassName == "FaceFXAsset" && exportEntry.Game != MEGame.ME2);
+        public override bool CanParse(ExportEntry exportEntry) => (exportEntry.ClassName == "FaceFXAnimSet" || (exportEntry.ClassName == "FaceFXAsset" && exportEntry.Game != MEGame.ME2)) && !exportEntry.IsDefaultObject;
 
         public override void LoadExport(ExportEntry exportEntry)
         {
@@ -152,10 +160,12 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                     treeView_WinFormsHost.Child.MouseDoubleClick -= treeView_MouseDoubleClick;
                     treeView_WinFormsHost.Child.Dispose();
                     treeView_WinFormsHost.Child = null;
+                    treeView = null;
                 }
                 treeView_WinFormsHost.Dispose();
                 treeView_WinFormsHost = null;
             }
+            graph.Dispose();
         }
 
         #endregion

@@ -78,6 +78,12 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
             ContainingClass = containingClass;
         }
 
+        public static void Compile(Function func, UFunction target)
+        {
+            var bytecodeCompiler = new ByteCodeCompilerVisitor(target);
+            bytecodeCompiler.Compile(func);
+        }
+
         public void Compile(Function func)
         {
             if (Target is UFunction uFunction)
@@ -163,12 +169,18 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
         }
 
 
+        public static void Compile(State state, UState target)
+        {
+            var bytecodeCompiler = new ByteCodeCompilerVisitor(target);
+            bytecodeCompiler.Compile(state);
+        }
+
         public void Compile(State state)
         {
             if (Target is UState uState)
             {
                 CompilationUnit = state;
-                uState.LabelTableOffset = 0;
+                uState.LabelTableOffset = ushort.MaxValue;
                 Emit(state.Body);
 
                 WriteOpCode(OpCodes.Stop);
@@ -182,7 +194,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
                     }
                     WriteOpCode(OpCodes.LabelTable);
                     uState.LabelTableOffset = Position;
-                    foreach (Label label in state.Labels)
+                    foreach (Label label in Enumerable.Reverse(state.Labels))
                     {
                         WriteName(label.Name);
                         WriteInt(label.StartOffset);
@@ -746,7 +758,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
 
         public bool VisitNode(ArraySymbolRef node)
         {
-            WriteOpCode(node.Array.ResolveType() is DynamicArrayType ? OpCodes.DynArrayElement : OpCodes.ArrayElement);
+            WriteOpCode(node.IsDynamic ? OpCodes.DynArrayElement : OpCodes.ArrayElement);
             Emit(node.Index);
             Emit(node.Array);
             return true;
@@ -1354,7 +1366,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
         public static string PropertyTypeName(VariableType type) =>
             type switch
             {
-                Class component when component.SameAsOrSubClassOf("Component") => "ComponentProperty",
+                Class {IsComponent: true} => "ComponentProperty",
                 Class {IsInterface: true} => "InterfaceProperty",
                 Class _ => "ObjectProperty",
                 Struct _ => "StructProperty",

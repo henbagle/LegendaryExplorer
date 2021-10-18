@@ -91,6 +91,10 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             {
                 var name = Consume(TokenType.Word);
                 if (name == null) return null;
+                if (name.Value.CaseInsensitiveEquals("None"))
+                {
+                    TypeError("'None' cannot be used as a variable name!", name);
+                }
 
                 if (Consume(TokenType.LeftSqrBracket) != null)
                 {
@@ -284,6 +288,73 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
 
         public Token<string> Consume(params string[] strs) => strs.Select(Consume).NonNull().FirstOrDefault();
 
+
+        public static bool TypeCompatible(VariableType dest, VariableType src, bool coerce = false)
+        {
+            if (dest is DynamicArrayType destArr && src is DynamicArrayType srcArr)
+            {
+                return TypeCompatible(destArr.ElementType, srcArr.ElementType);
+            }
+
+            if (dest is ClassType destClassType && src is ClassType srcClassType)
+            {
+                return destClassType.ClassLimiter == srcClassType.ClassLimiter || ((Class)srcClassType.ClassLimiter).SameAsOrSubClassOf(destClassType.ClassLimiter.Name);
+            }
+
+            if (dest.PropertyType == EPropertyType.Byte && src.PropertyType == EPropertyType.Byte)
+            {
+                return true;
+            }
+
+            if (dest is DelegateType destDel && src is DelegateType srcDel)
+            {
+                return true;
+                // this seems like how it ought to be done, but there is bioware code that would have only compiled if all delegates are considered the same type
+                // maybe log a warning here instead of an error?
+                //return destDel.DefaultFunction.SignatureEquals(srcDel.DefaultFunction);
+            }
+
+            if (dest is Class destClass)
+            {
+                if (src is Class srcClass)
+                {
+                    bool sameAsOrSubClassOf = srcClass.SameAsOrSubClassOf(destClass);
+                    if (srcClass.IsInterface)
+                    {
+                        return sameAsOrSubClassOf || destClass.Implements(srcClass);
+                    }
+
+                    if (destClass.IsInterface)
+                    {
+                        return sameAsOrSubClassOf || srcClass.Implements(destClass);
+                    }
+                    return sameAsOrSubClassOf
+                           //this seems super wrong obviously. A sane type system would require an explicit downcast.
+                           //But to make this work with existing bioware code, it's this, or write a control-flow analyzer that implicitly downcasts based on typecheck conditional gates
+                           //I have chosen the lazy path
+                           || destClass.SameAsOrSubClassOf(srcClass);
+                }
+
+                if (destClass.Name.CaseInsensitiveEquals("Object") && src is ClassType)
+                {
+                    return true;
+                }
+
+                if (src is null)
+                {
+                    return true;
+                }
+            }
+
+            if (dest.Name.CaseInsensitiveEquals(src?.Name)) return true;
+            ECast cast = CastHelper.GetConversion(dest, src);
+            if (coerce)
+            {
+                return cast != ECast.Max;
+            }
+            return cast.Has(ECast.AutoConvert);
+        }
+
         #endregion
 
         public Expression ParseLiteral()
@@ -307,6 +378,10 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
 
             if (Matches(TokenType.NameLiteral))
             {
+                if (token.Value.Length > 63)
+                {
+                    Log.LogWarning($"Names should be less than 64 characters! (This name is {token.Value.Length})", token.StartPos, token.EndPos);
+                }
                 return new NameLiteral(token.Value, token.StartPos, token.EndPos);
             }
 
@@ -431,7 +506,7 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             return isNegative ? -val : val;
         }
 
-        protected Expression ParseObjectLiteral(Token<string> className, Token<string> objName)
+        protected Expression ParseObjectLiteral(Token<string> className, Token<string> objName, bool noActors = true)
         {
             className.SyntaxType = EF.TypeName;
             bool isClassLiteral = className.Value.CaseInsensitiveEquals(CLASS);
@@ -451,7 +526,7 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
                 }
                 else
                 {
-                    if (cls.SameAsOrSubClassOf("Actor"))
+                    if (noActors && cls.SameAsOrSubClassOf("Actor"))
                     {
                         TypeError("Object constants must not be Actors!", className);
                     }
