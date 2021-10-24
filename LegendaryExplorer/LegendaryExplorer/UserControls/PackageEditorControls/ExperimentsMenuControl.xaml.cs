@@ -1234,9 +1234,15 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsH.MakeLocalizedTLK(GetPEWindow());
         }
+
         private void FindUncapitalizedText_Click(object sender, RoutedEventArgs e)
         {
             PackageEditorExperimentsH.FindUncapitalizedTargetText(GetPEWindow());
+        }
+
+        private void CopyDecalActors_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.CopyDecalActors(GetPEWindow());
         }
 
         #endregion
