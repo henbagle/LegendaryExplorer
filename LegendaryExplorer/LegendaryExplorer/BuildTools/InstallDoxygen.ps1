@@ -9,11 +9,11 @@ $outpath = $outpath.trim()
 
 if(!(Test-Path $outpath))
 {
-	Write-Host "Creating " + $outpath;
+	Write-Host "Creating $outpath";
 	New-Item -ItemType Directory -Force -Path $outpath
 }
 $zipDownloadPath = $outpath + $(Split-Path -Path $doxygenUrl -Leaf)
-Write-Host "Downloading from " + $doxygenUrl + " to " + $zipDownloadPath 
+Write-Host "Downloading from $doxygenUrl to $zipDownloadPath"
 
 Invoke-WebRequest -Uri $doxygenUrl -OutFile $zipDownloadPath
 Expand-Archive -LiteralPath $zipDownloadPath -DestinationPath $outpath
