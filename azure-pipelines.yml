@@ -55,6 +55,8 @@ steps:
   inputs:
     targetType: 'inline'
     script: |
+      git config --global user.email "hen.bagle@gmail.com"
+      git config --global user.name "henbagle"
       git checkout gh-pages
       Copy-Item -Path "$(DOXYGEN_OUTPUT)\html" -Destination .\html -Recurse
       git add .\html\
