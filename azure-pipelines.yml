@@ -10,16 +10,16 @@ variables:
   DOXYGEN_DIR: '$(Pipeline.Workspace)/doxygen'
   DOXYGEN_OUTPUT: '$(Pipeline.Workspace)'
 steps:
-# - task: Cache@2
-#   displayName: "Cache Doxygen Install"
-#   inputs:
-#     key: '"$(doxygenUrl)" | $(DOXYGEN_DIR)'
-#     path: $(DOXYGEN_DIR)
-#     cacheHitVar: 'CACHE_RESTORED'
+- task: Cache@2
+  displayName: "Cache Doxygen Install"
+  inputs:
+    key: '"$(doxygenUrl)" | $(DOXYGEN_DIR)'
+    path: $(DOXYGEN_DIR)
+    cacheHitVar: 'CACHE_RESTORED'
     
-- task: PowerShell@2
+git- task: PowerShell@2
   displayName: "Install Doxygen"
-  #condition: ne(variables.CACHE_RESTORED, 'true')
+  condition: ne(variables.CACHE_RESTORED, 'true')
   inputs:
     filePath: '$(Build.SourcesDirectory)/LegendaryExplorer/LegendaryExplorer/BuildTools/InstallDoxygen.ps1'
     arguments: $(DOXYGEN_DIR)
