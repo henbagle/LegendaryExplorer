@@ -15,12 +15,12 @@ steps:
   clean: true
   persistCredentials: true
 
- - task: Cache@2
-   displayName: "Cache Doxygen Install"
-   inputs:
-     key: '"$(doxygenUrl)"'
-     path: $(DOXYGEN_WORKINGDIR)
-     cacheHitVar: 'CACHE_RESTORED'
+- task: Cache@2
+  displayName: "Cache Doxygen Install"
+  inputs:
+    key: '"$(doxygenUrl)"'
+    path: $(DOXYGEN_WORKINGDIR)
+    cacheHitVar: 'CACHE_RESTORED'
 
 - task: PowerShell@2
   displayName: "Download Doxygen"
@@ -55,8 +55,6 @@ steps:
   inputs:
     targetType: 'inline'
     script: |
-      git config --global user.email "hen.bagle@gmail.com"
-      git config --global user.name "henbagle"
       git checkout gh-pages
       Copy-Item -Path "$(DOXYGEN_OUTPUT)\html" -Destination .\nightly -Recurse
       git add .\nightly\
