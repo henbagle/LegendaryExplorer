@@ -58,7 +58,7 @@ steps:
       git config user.email "hen.bagle@gmail.com"
       git config user.name "ME3Tweaks-LEC-Documentation"
       git checkout gh-pages
-      Copy-Item -Path "$(DOXYGEN_OUTPUT)\html" -Destination .\nightly -Recurse
+      Copy-Item -Path "$(DOXYGEN_OUTPUT)\html\*" -Destination .\nightly\html -Recurse
       git add .\nightly\
       git commit -m "Update documentation [skip ci]"
       git push origin gh-pages
