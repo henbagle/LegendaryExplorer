@@ -9,7 +9,7 @@ pool:
 variables:
   DOXYGEN_URL: "https://www.doxygen.nl/files/doxygen-1.9.2.windows.x64.bin.zip"
   DOXYGEN_WORKINGDIR: '$(Pipeline.Workspace)\Documentation\Doxygen'
-  DOXYGEN_OUTPUT: '$(Pipeline.Workspace)\Doxygen\Output'
+  DOXYGEN_OUTPUT: '$(Pipeline.Workspace)\Documentation\Output'
 steps:
 - checkout: self
   clean: true
@@ -24,7 +24,7 @@ steps:
 
 - task: PowerShell@2
   displayName: "Download Doxygen"
-  # condition: ne(variables.CACHE_RESTORED, 'true')
+  condition: ne(variables.CACHE_RESTORED, 'true')
   inputs:
     targetType: 'inline'
     script: |
