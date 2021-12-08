@@ -55,6 +55,8 @@ steps:
   inputs:
     targetType: 'inline'
     script: |
+      git config user.email "hen.bagle@gmail.com"
+      git config user.name "ME3Tweaks-LEC-Documentation"
       git checkout gh-pages
       Copy-Item -Path "$(DOXYGEN_OUTPUT)\html" -Destination .\nightly -Recurse
       git add .\nightly\
