@@ -59,7 +59,7 @@ steps:
       git config user.name "ME3Tweaks-LEC-Documentation"
       git checkout gh-pages
       Remove-Item .\nightly\* -Recurse
-      Copy-Item -Path "$(DOXYGEN_OUTPUT)\html\" -Destination .\nightly -Recurse
+      Copy-Item -Path "$(DOXYGEN_OUTPUT)\html\*" -Destination .\nightly -Recurse
       git add .\nightly\
       git commit -m "Update documentation [skip ci]"
       git push origin gh-pages
