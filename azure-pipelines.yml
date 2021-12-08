@@ -8,8 +8,8 @@ pool:
 
 variables:
   DOXYGEN_URL: "https://www.doxygen.nl/files/doxygen-1.9.2.windows.x64.bin.zip"
-  DOXYGEN_WORKINGDIR: '$(Pipeline.Workspace)\doxygen'
-  DOXYGEN_OUTPUT: '$(Pipeline.Workspace)\tmp'
+  DOXYGEN_WORKINGDIR: '$(Pipeline.Workspace)\Documentation\Doxygen'
+  DOXYGEN_OUTPUT: '$(Pipeline.Workspace)\Doxygen\Output'
 steps:
 - checkout: self
   clean: true
@@ -48,7 +48,7 @@ steps:
   inputs:
     targetType: 'inline'
     script: |
-      $(DOXYGEN_WORKINGDIR)\doxygen.exe $(Build.SourcesDirectory)\DoxygenConfigLEC
+      $(DOXYGEN_WORKINGDIR)\doxygen.exe $(Build.SourcesDirectory)\Documentation\DoxygenConfigAzurePipelines
 
 - task: PowerShell@2
   displayName: "Commit Documentation to GitHub Pages"
@@ -58,7 +58,7 @@ steps:
       git config --global user.email "hen.bagle@gmail.com"
       git config --global user.name "henbagle"
       git checkout gh-pages
-      Copy-Item -Path "$(DOXYGEN_OUTPUT)\html" -Destination .\html -Recurse
+      Copy-Item -Path "$(DOXYGEN_OUTPUT)\html" -Destination .\nightly -Recurse
       git add .\html\
       git commit -m "Update documentation [skip ci]"
       git push origin gh-pages
