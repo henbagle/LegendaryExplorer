@@ -19,7 +19,7 @@ steps:
   displayName: "Cache Doxygen Install"
   inputs:
     key: '"$(doxygenUrl)"'
-    path: $(DOXYGEN_WORKINGDIR)
+    path: $(doxygenWorkingDir)
     cacheHitVar: 'CACHE_RESTORED'
 
 - task: PowerShell@2
