@@ -57,8 +57,12 @@ steps:
     script: |
       git config user.email "hen.bagle@gmail.com"
       git config user.name "ME3Tweaks-LEC-Documentation"
+      "Test git changes" | Out-File -FilePath .\CONTRIBUTING.md
       git checkout gh-pages
-      Remove-Item .\nightly\* -Recurse
+      if(Test-Path .\nightly\)
+      {
+        Remove-Item .\nightly\* -Recurse
+      }
       Copy-Item -Path "$(DOXYGEN_OUTPUT)\html\*" -Destination .\nightly -Recurse
       git add .\nightly\
       git commit -m "Update documentation [skip ci]"
