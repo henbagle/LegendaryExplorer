@@ -59,7 +59,7 @@ steps:
         Remove-Item .\nightly\* -Recurse
       }
       Copy-Item -Path "$(doxygenOutputDir)\html\*" -Destination .\nightly -Recurse
-      Get-ChildItem .\nightly\**\*
+      git add .\nightly\*
       git add .\nightly\**\*
       git commit -m "Update documentation [skip ci]"
       git push origin gh-pages
