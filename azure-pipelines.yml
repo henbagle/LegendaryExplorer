@@ -58,7 +58,7 @@ steps:
       git config user.email "hen.bagle@gmail.com"
       git config user.name "ME3Tweaks-LEC-Documentation"
       "Test git changes" | Out-File -FilePath .\CONTRIBUTING.md
-      git checkout gh-pages
+      git checkout -f gh-pages
       if(Test-Path .\nightly\)
       {
         Remove-Item .\nightly\* -Recurse
