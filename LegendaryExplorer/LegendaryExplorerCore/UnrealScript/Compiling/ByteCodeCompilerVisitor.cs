@@ -84,7 +84,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
             bytecodeCompiler.Compile(func);
         }
 
-        public void Compile(Function func)
+        private void Compile(Function func)
         {
             if (Target is UFunction uFunction)
             {
@@ -117,35 +117,48 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
                     }
                 }
 
-                foreach (FunctionParameter parameter in func.Parameters.Where(param => param.IsOptional))
-                {
-                    if (parameter.DefaultParameter is Expression expr)
-                    {
-                        WriteOpCode(OpCodes.DefaultParmValue);
 
-                        using (WriteSkipPlaceholder())
+                if (func.IsNative)
+                {
+                    foreach (FunctionParameter functionParameter in func.Parameters)
+                    {
+                        WriteOpCode(OpCodes.NativeParm);
+                        WriteObjectRef(ResolveSymbol(functionParameter));
+                    }
+                    WriteOpCode(OpCodes.Nothing);
+                }
+                else
+                {
+                    foreach (FunctionParameter parameter in func.Parameters.Where(param => param.IsOptional))
+                    {
+                        if (parameter.DefaultParameter is Expression expr)
                         {
-                            Emit(AddConversion(parameter.VarType, expr));
-                            WriteOpCode(OpCodes.EndParmValue);
+                            WriteOpCode(OpCodes.DefaultParmValue);
+
+                            using (WriteSkipPlaceholder())
+                            {
+                                Emit(AddConversion(parameter.VarType, expr));
+                                WriteOpCode(OpCodes.EndParmValue);
+                            }
                         }
+                        else
+                        {
+                            WriteOpCode(OpCodes.Nothing);
+                        }
+                    }
+
+                    Emit(func.Body);
+
+                    WriteOpCode(OpCodes.Return);
+                    if (returnValue != null)
+                    {
+                        WriteOpCode(OpCodes.ReturnNullValue);
+                        WriteObjectRef(returnValue.Export);
                     }
                     else
                     {
                         WriteOpCode(OpCodes.Nothing);
                     }
-                }
-
-                Emit(func.Body);
-
-                WriteOpCode(OpCodes.Return);
-                if (returnValue != null)
-                {
-                    WriteOpCode(OpCodes.ReturnNullValue);
-                    WriteObjectRef(returnValue.Export);
-                }
-                else
-                {
-                    WriteOpCode(OpCodes.Nothing);
                 }
 
                 WriteOpCode(OpCodes.EndOfScript);
@@ -160,7 +173,6 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
 
                 Target.ScriptBytecodeSize = GetMemLength();
                 Target.ScriptBytes = GetByteCode();
-                Target.Export.WriteBinary(Target);
             }
             else
             {
@@ -175,7 +187,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
             bytecodeCompiler.Compile(state);
         }
 
-        public void Compile(State state)
+        private void Compile(State state)
         {
             if (Target is UState uState)
             {
@@ -215,7 +227,6 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
 
                 Target.ScriptBytecodeSize = GetMemLength();
                 Target.ScriptBytes = GetByteCode();
-                Target.Export.WriteBinary(Target);
             }
             else
             {
@@ -266,7 +277,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
 
         public bool VisitNode(ForEachLoop node)
         {
-            if (node.IteratorCall is DynArrayIterator or CompositeSymbolRef {InnerSymbol: DynArrayIterator})
+            if (node.IteratorCall is DynArrayIterator or CompositeSymbolRef { InnerSymbol: DynArrayIterator })
             {
                 WriteOpCode(OpCodes.DynArrayIterator);
             }
@@ -504,14 +515,19 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
 
         public bool VisitNode(ExpressionOnlyStatement node)
         {
-            
-            if (GetAffector(node.Value) is {RetValNeedsDestruction: true} func)
+
+            if (GetAffector(node.Value) is { RetValNeedsDestruction: true } func)
             {
                 WriteOpCode(OpCodes.EatReturnValue);
                 WriteObjectRef(ResolveReturnValue(func));
             }
             Emit(node.Value);
             return true;
+        }
+
+        public bool VisitNode(ReplicationStatement node)
+        {
+            throw new NotImplementedException();
         }
 
         public bool VisitNode(ErrorStatement node)
@@ -570,7 +586,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
 
             VariableType lType = node.Operator.LeftOperand.VarType;
             VariableType rType = node.Operator.RightOperand.VarType;
-            if (node.Operator.LeftOperand.VarType is Class {IsInterface: true} c)
+            if (node.Operator.LeftOperand.VarType is Class { IsInterface: true } c)
             {
                 lType = rType = node.LeftOperand.ResolveType() ?? node.RightOperand.ResolveType() ?? c;
             }
@@ -623,7 +639,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
         public bool VisitNode(DelegateComparison node)
         {
             useInstanceDelegate = true;
-            WriteOpCode(node.RightOperand.ResolveType() is DelegateType {IsFunction: true}
+            WriteOpCode(node.RightOperand.ResolveType() is DelegateType { IsFunction: true }
                             ? node.IsEqual
                                 ? OpCodes.EqualEqual_DelFunc
                                 : OpCodes.NotEqual_DelFunc
@@ -686,7 +702,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
 
         public bool VisitNode(FunctionCall node)
         {
-            Function func = (Function)node.Function.Node;
+            var func = (Function)node.Function.Node;
             if (func.NativeIndex > 0)
             {
                 WriteNativeOpCode(func.NativeIndex);
@@ -710,13 +726,13 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
             {
                 WriteOpCode(OpCodes.NamedFunction);
                 WriteName(func.Name);
-                if (NodeUtils.GetContainingClass(func).VirtualFunctionLookup.TryGetValue(func.Name, out ushort idx))
+                if (NodeUtils.GetContainingClass(func).VirtualFunctionNames.IndexOf(func.Name) is var idx and >= 0)
                 {
-                    WriteUShort(idx);
+                    WriteUShort((ushort)idx);
                 }
                 else
                 {
-                    throw new Exception($"Line {node.StartPos.Line}: Could not find '{func.Name}' in #{ContainingClass.UIndex} {ContainingClass.ObjectName}'s FullFunctions list!");
+                    throw new Exception($"Line {node.StartPos.Line}: Could not find '{func.Name}' in #{ContainingClass.UIndex} {ContainingClass.ObjectName}'s Virtual Function Table!");
                 }
             }
             CompileArguments(node.Arguments, func.Parameters);
@@ -726,7 +742,16 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
         public bool VisitNode(DelegateCall node)
         {
             WriteOpCode(OpCodes.DelegateFunction);
-            Emit(node.DelegateReference);
+            var varDecl = (VariableDeclaration)node.DelegateReference.Node;
+            if (varDecl.Outer is Function)
+            {
+                WriteByte(1);
+            }
+            else
+            {
+                WriteByte(0);
+            }
+            WriteObjectRef(ResolveSymbol(varDecl));
             WriteName(node.DefaultFunction.Name);
             CompileArguments(node.Arguments, node.DefaultFunction.Parameters);
             return true;
@@ -870,7 +895,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
                     return true;
             }
 
-            VariableDeclaration varDecl = (VariableDeclaration)node.Node;
+            var varDecl = (VariableDeclaration)node.Node;
             if (varDecl.Name == "Self")
             {
                 WriteOpCode(OpCodes.Self);
@@ -1179,22 +1204,22 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
                 WriteByte((byte)i);
             }
             else switch (i)
-            {
-                case 0:
-                    WriteOpCode(OpCodes.IntZero);
-                    break;
-                case 1:
-                    WriteOpCode(OpCodes.IntOne);
-                    break;
-                case >= 0 and < 256:
-                    WriteOpCode(OpCodes.IntConstByte);
-                    WriteByte((byte)i);
-                    break;
-                default:
-                    WriteOpCode(OpCodes.IntConst);
-                    WriteInt(i);
-                    break;
-            }
+                {
+                    case 0:
+                        WriteOpCode(OpCodes.IntZero);
+                        break;
+                    case 1:
+                        WriteOpCode(OpCodes.IntOne);
+                        break;
+                    case >= 0 and < 256:
+                        WriteOpCode(OpCodes.IntConstByte);
+                        WriteByte((byte)i);
+                        break;
+                    default:
+                        WriteOpCode(OpCodes.IntConst);
+                        WriteInt(i);
+                        break;
+                }
 
             return true;
         }
@@ -1337,7 +1362,7 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
                 State state => ResolveState(state),
                 Function func => ResolveFunction(func),
                 FunctionParameter param => parameters[param.Name].Export,
-                VariableDeclaration {Outer: Function} local => locals[local.Name].Export,
+                VariableDeclaration { Outer: Function } local => locals[local.Name].Export,
                 VariableDeclaration field => ResolveProperty(field),
                 SymbolReference symRef => ResolveSymbol(symRef.Node),
                 _ => throw new ArgumentOutOfRangeException(nameof(node))
@@ -1356,9 +1381,16 @@ namespace LegendaryExplorerCore.UnrealScript.Compiling
 
         private IEntry ResolveState(State s) => Pcc.getEntryOrAddImport($"{ResolveSymbol(s.Outer).InstancedFullPath}.{s.Name}", "State");
 
-        private IEntry ResolveClass(Class c) =>
-            EntryImporter.EnsureClassIsInFile(Pcc, c.Name, RelinkResultsAvailable: relinkResults =>
-                    throw new Exception($"Unable to resolve class '{c.Name}'! There were relinker errors: {string.Join("\n\t", relinkResults.Select(pair => pair.Message))}"));
+        private IEntry ResolveClass(Class c)
+        {
+            RelinkerOptionsPackage rop = new RelinkerOptionsPackage() { ImportExportDependencies = true };
+            var entry = EntryImporter.EnsureClassIsInFile(Pcc, c.Name, rop);
+            if (rop.RelinkReport.Any())
+            {
+                throw new Exception($"Unable to resolve class '{c.Name}'! There were relinker errors: {string.Join("\n\t", rop.RelinkReport.Select(pair => pair.Message))}");
+            }
+            return entry;
+        }
 
         private IEntry ResolveObject(string instancedFullPath) => Pcc.Exports.FirstOrDefault(exp => exp.InstancedFullPath == instancedFullPath) ??
                                                                   (IEntry)Pcc.Imports.FirstOrDefault(imp => imp.InstancedFullPath == instancedFullPath);

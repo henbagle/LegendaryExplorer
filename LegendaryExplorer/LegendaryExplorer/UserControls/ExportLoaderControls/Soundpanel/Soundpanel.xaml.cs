@@ -187,7 +187,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             }
         }
 
-        public override void PoppedOut(MenuItem recentsMenuItem)
+        public override void PoppedOut(ExportLoaderHostedWindow elhw)
         {
             //todo: improve ui layout on popout
         }
@@ -773,7 +773,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             StartOrPausePlaying();
         }
 
-        public void StartOrPausePlaying()
+        public void StartOrPausePlaying(double startPos = 0)
         {
             bool playToggle = true;
             if (_playbackState == PlaybackState.Stopped)
@@ -825,6 +825,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                         {
                             PlaybackStopType = SoundpanelAudioPlayer.PlaybackStopTypes.PlaybackStoppedReachingEndOfFile
                         };
+                        _audioPlayer.SetPosition(startPos);
                         _audioPlayer.PlaybackPaused += _audioPlayer_PlaybackPaused;
                         _audioPlayer.PlaybackResumed += _audioPlayer_PlaybackResumed;
                         _audioPlayer.PlaybackStopped += _audioPlayer_PlaybackStopped;
@@ -979,11 +980,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
 
         private void TrackControlMouseUp(object p)
         {
-            if (_audioPlayer != null)
-            {
-                _audioPlayer.SetPosition(CurrentTrackPosition);
-                _audioPlayer.Play(NAudio.Wave.PlaybackState.Paused, CurrentVolume);
-            }
+            PlayFromCurrentTrackPosition();
         }
 
         private bool CanTrackControlMouseDown(object p) => _playbackState == PlaybackState.Playing;
@@ -1034,11 +1031,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         {
             if (!SeekUpdatingDueToTimer)
             {
-                if (_audioPlayer != null)
-                {
-                    _audioPlayer.SetPosition(CurrentTrackPosition);
-                    _audioPlayer.Play(NAudio.Wave.PlaybackState.Paused, CurrentVolume);
-                }
+                PlayFromCurrentTrackPosition();
             }
 
             SeekDragging = false;
@@ -1048,11 +1041,20 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         {
             if (!SeekUpdatingDueToTimer && !SeekDragging)
             {
-                if (_audioPlayer != null)
-                {
-                    _audioPlayer.SetPosition(CurrentTrackPosition);
-                    _audioPlayer.Play(NAudio.Wave.PlaybackState.Paused, CurrentVolume);
-                }
+                PlayFromCurrentTrackPosition();
+            }
+        }
+
+        private void PlayFromCurrentTrackPosition()
+        {
+            if (_playbackState == PlaybackState.Stopped)
+            {
+                StartOrPausePlaying(CurrentTrackPosition);
+            }
+            else if (_audioPlayer != null)
+            {
+                _audioPlayer.SetPosition(CurrentTrackPosition);
+                _audioPlayer.Play(NAudio.Wave.PlaybackState.Paused, CurrentVolume);
             }
         }
 
@@ -1242,27 +1244,14 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             }
         }
 
-        /// <summary>
-        /// Checks the Wwise path for the selected game, and shows the WwisePathDialog if it is incorrect
-        /// </summary>
-        /// <param name="game"></param>
-        public static void CheckWwisePathForGame(MEGame game)
-        {
-            var path = WwiseCliHandler.GetWwiseCliPath(game);
-            if (string.IsNullOrEmpty(path) || !WwiseVersions.IsCorrectWwiseVersion(game, path))
-            {
-                SetWwisePathDialog swpd = new ();
-                swpd.ShowDialog();
-            }
-        }
-
         private async void ReplaceEmbeddedWEMFromWave(string sourceFile = null, WwiseConversionSettingsPackage conversionSettings = null)
         {
             if (ExportInfoListBox.SelectedItem is EmbeddedWEMFile wemToReplace && (CurrentLoadedExport.FileRef.Game.IsGame3() || CurrentLoadedExport.FileRef.Game == MEGame.LE2))
             {
                 if (sourceFile == null)
                 {
-                    CheckWwisePathForGame(CurrentLoadedExport.FileRef.Game);
+                    var correctPaths = WwiseCliHandler.CheckWwisePathForGame(CurrentLoadedExport.FileRef.Game);
+                    if (!correctPaths) return;
                     OpenFileDialog d = new OpenFileDialog { Filter = "Wave PCM|*.wav" };
                     bool? res = d.ShowDialog();
                     if (res.HasValue && res.Value)
@@ -1347,9 +1336,9 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         {
             if (sourceFile == null)
             {
-                CheckWwisePathForGame(Pcc.Game);
+                var correctPaths = WwiseCliHandler.CheckWwisePathForGame(Pcc.Game);
                 OpenFileDialog d = new OpenFileDialog { Filter = "Wave PCM|*.wav" };
-                if (d.ShowDialog() == true)
+                if (correctPaths && d.ShowDialog() == true)
                 {
                     sourceFile = d.FileName;
                 }

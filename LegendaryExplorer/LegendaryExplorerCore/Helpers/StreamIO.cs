@@ -21,10 +21,9 @@
  */
 
 using System;
-using System.Buffers.Binary;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using LegendaryExplorerCore.Gammtek.IO;
 using LegendaryExplorerCore.Memory;
@@ -52,6 +51,11 @@ namespace LegendaryExplorerCore.Helpers
             return memory;
         }
 
+        public static void ReadToSpan(this Stream stream, Span<byte> buffer)
+        {
+            if (stream.Read(buffer) != buffer.Length)
+                throw new Exception("Stream read error!");
+        }
 
         public static byte[] ReadToBuffer(this Stream stream, int count)
         {
@@ -81,48 +85,18 @@ namespace LegendaryExplorerCore.Helpers
             stream.Write(buffer);
         }
 
-        public static Guid ReadGuid(this EndianReader stream)
-        {
-            var a = stream.ReadInt32();
-            var b = stream.ReadInt16();
-            var c = stream.ReadInt16();
-            var d = stream.ReadBytes(8);
-
-            return new Guid(a, b, c, d);
-        }
-
         public static Guid ReadGuid(this Stream stream)
         {
-            var a = stream.ReadInt32();
-            var b = stream.ReadInt16();
-            var c = stream.ReadInt16();
-            var d = stream.ReadToBuffer(8);
-
-            return new Guid(a, b, c, d);
+            Span<byte> guidBytes = stackalloc byte[16];
+            stream.Read(guidBytes);
+            return new Guid(guidBytes);
         }
 
         public static void WriteGuid(this Stream stream, Guid value)
         {
-            var data = value.ToByteArray();
-
-            Debug.Assert(data.Length == 16);
-
-            stream.WriteInt32(BitConverter.ToInt32(data, 0));
-            stream.WriteInt16(BitConverter.ToInt16(data, 4));
-            stream.WriteInt16(BitConverter.ToInt16(data, 6));
-            stream.Write(data, 8, 8);
-        }
-
-        public static void WriteGuid(this EndianWriter stream, Guid value)
-        {
-            var data = value.ToByteArray();
-
-            Debug.Assert(data.Length == 16);
-
-            stream.WriteInt32(BitConverter.ToInt32(data, 0));
-            stream.WriteInt16(BitConverter.ToInt16(data, 4));
-            stream.WriteInt16(BitConverter.ToInt16(data, 6));
-            stream.Write(data, 8, 8);
+            Span<byte> data = stackalloc byte[16];
+            MemoryMarshal.Write(data, ref value);
+            stream.Write(data);
         }
 
 
@@ -170,7 +144,8 @@ namespace LegendaryExplorerCore.Helpers
 
         public static string ReadStringLatin1(this Stream stream, int count)
         {
-            byte[] buffer = stream.ReadToBuffer(count);
+            Span<byte> buffer = count > 256 ? new byte[count] : stackalloc byte[count];
+            stream.ReadToSpan(buffer);
             return Encoding.Latin1.GetString(buffer);
         }
 
@@ -189,18 +164,19 @@ namespace LegendaryExplorerCore.Helpers
 
         public static string ReadStringLatin1Null(this Stream stream, int count)
         {
-            return stream.ReadStringLatin1(count).Trim('\0');
+            return stream.ReadStringLatin1(count).TrimEnd('\0');
         }
 
         public static string ReadStringUnicode(this Stream stream, int count)
         {
-            var buffer = stream.ReadToBuffer(count);
+            Span<byte> buffer = count > 256 ? new byte[count] : stackalloc byte[count];
+            stream.ReadToSpan(buffer);
             return Encoding.Unicode.GetString(buffer);
         }
 
         public static string ReadStringUnicodeNull(this Stream stream, int count)
         {
-            return stream.ReadStringUnicode(count).Trim('\0');
+            return stream.ReadStringUnicode(count).TrimEnd('\0');
         }
 
         public static string ReadStringUnicodeNull(this Stream stream)
@@ -222,7 +198,8 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteStringLatin1(this Stream stream, string str)
         {
-            stream.Write(Encoding.Latin1.GetBytes(str), 0, Encoding.Latin1.GetByteCount(str));
+            byte[] buffer = Encoding.Latin1.GetBytes(str);
+            stream.Write(buffer, 0, buffer.Length);
         }
 
         public static void WriteStringLatin1Null(this Stream stream, string str)
@@ -233,7 +210,8 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteStringLatin1(this EndianWriter stream, string str)
         {
-            stream.Write(Encoding.Latin1.GetBytes(str), 0, Encoding.Latin1.GetByteCount(str));
+            byte[] buffer = Encoding.Latin1.GetBytes(str);
+            stream.Write(buffer, 0, buffer.Length);
         }
 
         public static void WriteStringLatin1Null(this EndianWriter stream, string str)
@@ -246,7 +224,8 @@ namespace LegendaryExplorerCore.Helpers
         #region ASCII SUPPORT
         public static string ReadStringASCII(this Stream stream, int count)
         {
-            byte[] buffer = stream.ReadToBuffer(count);
+            Span<byte> buffer = count > 256 ? new byte[count] : stackalloc byte[count];
+            stream.ReadToSpan(buffer);
             return Encoding.ASCII.GetString(buffer);
         }
 
@@ -270,7 +249,8 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteStringASCII(this Stream stream, string str)
         {
-            stream.Write(Encoding.ASCII.GetBytes(str), 0, Encoding.ASCII.GetByteCount(str));
+            byte[] buffer = Encoding.ASCII.GetBytes(str);
+            stream.Write(buffer, 0, buffer.Length);
         }
 
         public static void WriteStringASCIINull(this Stream stream, string str)
@@ -280,7 +260,8 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteStringASCII(this EndianWriter stream, string str)
         {
-            stream.Write(Encoding.ASCII.GetBytes(str), 0, Encoding.ASCII.GetByteCount(str));
+            byte[] buffer = Encoding.ASCII.GetBytes(str);
+            stream.Write(buffer, 0, buffer.Length);
         }
 
         public static void WriteStringASCIINull(this EndianWriter stream, string str)
@@ -292,7 +273,8 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteStringUnicode(this Stream stream, string str)
         {
-            stream.Write(Encoding.Unicode.GetBytes(str), 0, Encoding.Unicode.GetByteCount(str));
+            byte[] buffer = Encoding.Unicode.GetBytes(str);
+            stream.Write(buffer, 0, buffer.Length);
         }
 
         public static void WriteStringUnicodeNull(this Stream stream, string str)
@@ -304,7 +286,8 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteStringUnicode(this EndianWriter stream, string str)
         {
-            stream.Write(Encoding.Unicode.GetBytes(str), 0, Encoding.Unicode.GetByteCount(str));
+            byte[] buffer = Encoding.Unicode.GetBytes(str);
+            stream.Write(buffer, 0, buffer.Length);
         }
 
         public static void WriteStringUnicodeNull(this EndianWriter stream, string str)
@@ -324,7 +307,9 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteUInt64(this Stream stream, ulong data)
         {
-            stream.Write(BitConverter.GetBytes(data), 0, sizeof(ulong));
+            Span<byte> buffer = stackalloc byte[sizeof(ulong)];
+            MemoryMarshal.Write(buffer, ref data);
+            stream.Write(buffer);
         }
 
         public static long ReadInt64(this Stream stream)
@@ -337,7 +322,9 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteInt64(this Stream stream, long data)
         {
-            stream.Write(BitConverter.GetBytes(data), 0, sizeof(long));
+            Span<byte> buffer = stackalloc byte[sizeof(long)];
+            MemoryMarshal.Write(buffer, ref data);
+            stream.Write(buffer);
         }
 
         public static uint ReadUInt32(this Stream stream)
@@ -350,7 +337,9 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteUInt32(this Stream stream, uint data)
         {
-            stream.Write(BitConverter.GetBytes(data), 0, sizeof(uint));
+            Span<byte> buffer = stackalloc byte[sizeof(uint)];
+            MemoryMarshal.Write(buffer, ref data);
+            stream.Write(buffer);
         }
 
         public static int ReadInt32(this Stream stream)
@@ -363,7 +352,9 @@ namespace LegendaryExplorerCore.Helpers
 
         public static void WriteInt32(this Stream stream, int data)
         {
-            stream.Write(BitConverter.GetBytes(data), 0, sizeof(int));
+            Span<byte> buffer = stackalloc byte[sizeof(int)];
+            MemoryMarshal.Write(buffer, ref data);
+            stream.Write(buffer);
         }
 
         /// <summary>
@@ -453,21 +444,8 @@ namespace LegendaryExplorerCore.Helpers
             stream.Write(BitConverter.GetBytes(data), 0, sizeof(double));
         }
 
-        private const int DefaultBufferSize = 8 * 1024;
+        private const int DEFAULT_BUFFER_SIZE = 8 * 1024;
 
-
-        /// <summary>
-        ///     Reads the given stream up to the end, returning the data as a byte
-        ///     array.
-        /// </summary>
-        /// <param name="input">The stream to read from</param>
-        /// <exception cref="ArgumentNullException">input is null</exception>
-        /// <exception cref="IOException">An error occurs while reading from the stream</exception>
-        /// <returns>The data read from the stream</returns>
-        public static byte[] ReadFully(this Stream input)
-        {
-            return ReadFully(input, DefaultBufferSize);
-        }
 
         /// <summary>
         ///     Reads the given stream up to the end, returning the data as a byte
@@ -479,7 +457,7 @@ namespace LegendaryExplorerCore.Helpers
         /// <exception cref="ArgumentOutOfRangeException">bufferSize is less than 1</exception>
         /// <exception cref="IOException">An error occurs while reading from the stream</exception>
         /// <returns>The data read from the stream</returns>
-        public static byte[] ReadFully(this Stream input, int bufferSize)
+        public static byte[] ReadFully(this Stream input, int bufferSize = DEFAULT_BUFFER_SIZE)
         {
             if (bufferSize < 1)
             {

@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Misc;
@@ -250,6 +251,13 @@ namespace LegendaryExplorerCore.Packages
 
             if (!lookupTableNeedsToBeRegenerated)
             {
+                // CROSSGEN-V: CHECK BEFORE ADDING TO MAKE SURE WE DON'T GOOF IT UP
+                if (EntryLookupTable.TryGetValue(exportEntry.InstancedFullPath, out _))
+                {
+                    Debug.WriteLine($"ENTRY LOOKUP TABLE ALREADY HAS ITEM BEING ADDED!!! ITEM: {exportEntry.InstancedFullPath}");
+                    //Debugger.Break(); // This already exists!
+                }
+                // END CROSSGEN-V
                 EntryLookupTable[exportEntry.InstancedFullPath] = exportEntry;
                 tree.Add(exportEntry);
             }
@@ -314,7 +322,7 @@ namespace LegendaryExplorerCore.Packages
         /// </summary>
         /// <param name="uindex"></param>
         /// <returns></returns>
-        public bool IsImport(int uindex) => (uindex < 0 && uindex > int.MinValue && Math.Abs(uindex) <= ImportCount);
+        public bool IsImport(int uindex) => uindex < 0 && -uindex <= imports.Count;
 
         /// <summary>
         /// Adds an import to the tree. This method is used to add new imports.
@@ -324,6 +332,11 @@ namespace LegendaryExplorerCore.Packages
         {
             if (importEntry.FileRef != this)
                 throw new Exception("you cannot add a new import entry from another package file, it has invalid references!");
+
+            // If you need to catch a certain import being added
+            // uncomment the following
+            //if (importEntry.InstancedFullPath == "BIOC_Materials")
+            //    Debugger.Break();
 
             importEntry.Index = imports.Count;
             importEntry.PropertyChanged += importChanged;
@@ -685,9 +698,65 @@ namespace LegendaryExplorerCore.Packages
 
         private readonly object _updatelock = new();
         readonly HashSet<PackageUpdate> pendingUpdates = new();
-        readonly List<Task> tasks = new();
-        readonly Dictionary<int, bool> taskCompletion = new();
         const int queuingDelay = 50;
+        private Timer updateTimer;
+
+        private void UpdateToolsCallback(object _)
+        {
+            lock (_updatelock)
+            {
+                updateTimer.Dispose();
+                updateTimer = null;
+            }
+            new TaskFactory(LegendaryExplorerCoreLib.SYNCHRONIZATION_CONTEXT).StartNew(() =>
+            {
+                List<PackageUpdate> updates;
+                lock (_updatelock)
+                {
+                    updates = pendingUpdates.ToList();
+                    pendingUpdates.Clear();
+                }
+                var removedImports = updates.Where(u => u.Change == PackageChange.ImportRemove).Select(u => u.Index).ToList();
+                var removedExports = updates.Where(u => u.Change == PackageChange.ExportRemove).Select(u => u.Index).ToList();
+                var pendingUpdatesList = new List<PackageUpdate>();
+                //remove add/change updates for entries that have been removed
+                foreach (PackageUpdate upd in updates)
+                {
+                    switch (upd.Change)
+                    {
+                        case PackageChange.ExportAdd:
+                        case PackageChange.ExportData:
+                        case PackageChange.ExportHeader:
+                            {
+                                if (!removedExports.Contains(upd.Index))
+                                {
+                                    pendingUpdatesList.Add(upd);
+                                }
+                                break;
+                            }
+                        case PackageChange.ImportAdd:
+                        case PackageChange.ImportHeader:
+                            {
+                                if (!removedImports.Contains(upd.Index))
+                                {
+                                    pendingUpdatesList.Add(upd);
+                                }
+                                break;
+                            }
+                        default:
+                            pendingUpdatesList.Add(upd);
+                            break;
+                    }
+                }
+                //WeakUsers needs to come before Users so that FileLib will invalidate BEFORE ScriptEditor refreshes.
+                //This is hacky, and some sort of User priority system should be implemented in the future
+                foreach (var item in WeakUsers.Concat(Users))
+                {
+                    item.handleUpdate(pendingUpdatesList);
+                }
+            });
+        }
+
         protected void updateTools(PackageChange change, int index)
         {
             if (Users.Count == 0 && WeakUsers.Count == 0)
@@ -695,72 +764,11 @@ namespace LegendaryExplorerCore.Packages
                 return;
             }
             var update = new PackageUpdate(change, index);
-            bool isNewUpdate;
             lock (_updatelock)
             {
-                isNewUpdate = !pendingUpdates.Contains(update);
-            }
-            if (isNewUpdate)
-            {
-                lock (_updatelock)
-                {
-                    pendingUpdates.Add(update);
-                }
-                Task task = Task.Delay(queuingDelay);
-                taskCompletion[task.Id] = false;
-                tasks.Add(task);
-
-                task.ContinueWithOnUIThread(x =>
-                {
-                    taskCompletion[x.Id] = true;
-                    if (tasks.TrueForAll(t => taskCompletion[t.Id]))
-                    {
-                        tasks.Clear();
-                        taskCompletion.Clear();
-                        List<PackageUpdate> updates;
-                        lock (_updatelock)
-                        {
-                            updates = pendingUpdates.ToList();
-                            pendingUpdates.Clear();
-                        }
-                        var removedImports = updates.Where(u => u.Change == PackageChange.ImportRemove).Select(u => u.Index).ToList();
-                        var removedExports = updates.Where(u => u.Change == PackageChange.ExportRemove).Select(u => u.Index).ToList();
-                        var pendingUpdatesList = new List<PackageUpdate>();
-                        //remove add/change updates for entries that have been removed
-                        foreach (PackageUpdate upd in updates)
-                        {
-                            switch (upd.Change)
-                            {
-                                case PackageChange.ExportAdd:
-                                case PackageChange.ExportData:
-                                case PackageChange.ExportHeader:
-                                    {
-                                        if (!removedExports.Contains(upd.Index))
-                                        {
-                                            pendingUpdatesList.Add(upd);
-                                        }
-                                        break;
-                                    }
-                                case PackageChange.ImportAdd:
-                                case PackageChange.ImportHeader:
-                                    {
-                                        if (!removedImports.Contains(upd.Index))
-                                        {
-                                            pendingUpdatesList.Add(upd);
-                                        }
-                                        break;
-                                    }
-                                default:
-                                    pendingUpdatesList.Add(upd);
-                                    break;
-                            }
-                        }
-                        foreach (var item in Users.Concat(WeakUsers))
-                        {
-                            item.handleUpdate(pendingUpdatesList);
-                        }
-                    }
-                });
+                pendingUpdates.Add(update);
+                updateTimer ??= new Timer(UpdateToolsCallback);
+                updateTimer.Change(queuingDelay, Timeout.Infinite);
             }
         }
 

@@ -116,7 +116,7 @@ namespace LegendaryExplorerCore.Packages
 
         public Endian Endian { get; }
         public MEGame Game { get; private set; } //can only be ME1, ME2, ME3, LE1, LE2, LE3. UDK is a separate class
-        public GamePlatform Platform { get; private set; } = GamePlatform.Unknown;
+        public GamePlatform Platform { get; private set; }
 
         public enum GamePlatform
         {
@@ -149,63 +149,28 @@ namespace LegendaryExplorerCore.Packages
         private int unknown6;
         #endregion
 
-        private static bool isLoaderRegistered;
-        private static bool isStreamLoaderRegistered;
-        private static bool isQuickStreamLoaderRegistered;
-        private static bool isQuickLoaderRegistered;
-        public static Func<string, MEGame, MEPackage> RegisterLoader()
+        private static bool _isBlankPackageCreatorRegistered;
+        private static bool _isStreamLoaderRegistered;
+        public static Func<string, MEGame, MEPackage> RegisterBlankPackageCreator()
         {
-            if (isLoaderRegistered)
+            if (_isBlankPackageCreatorRegistered)
             {
                 throw new Exception(nameof(MEPackage) + " can only be initialized once");
             }
 
-            isLoaderRegistered = true;
-            return (f, g) =>
-            {
-                if (g != MEGame.Unknown)
-                {
-                    return new MEPackage(g, f);
-                }
-                return new MEPackage(new MemoryStream(File.ReadAllBytes(f)), f);
-            };
+            _isBlankPackageCreatorRegistered = true;
+            return (f, g) => new MEPackage(g, f);
         }
 
-        public static Func<string, MEPackage> RegisterQuickLoader()
+        public static Func<Stream, string, bool, Func<ExportEntry, bool>, MEPackage> RegisterStreamLoader()
         {
-            if (isQuickLoaderRegistered)
-            {
-                throw new Exception(nameof(MEPackage) + " quickloader can only be initialized once");
-            }
-
-            isQuickLoaderRegistered = true;
-            return f =>
-            {
-                using var fs = File.OpenRead(f); //This is faster than reading whole package file in
-                return new MEPackage(fs, f, onlyHeader: true);
-            };
-        }
-
-        public static Func<Stream, string, MEPackage> RegisterQuickStreamLoader()
-        {
-            if (isQuickStreamLoaderRegistered)
-            {
-                throw new Exception(nameof(MEPackage) + " quickstreamloader can only be initialized once");
-            }
-
-            isQuickStreamLoaderRegistered = true;
-            return (s, associatedFilePath) => new MEPackage(s, associatedFilePath, onlyHeader: true);
-        }
-
-        public static Func<Stream, string, MEPackage> RegisterStreamLoader()
-        {
-            if (isStreamLoaderRegistered)
+            if (_isStreamLoaderRegistered)
             {
                 throw new Exception(nameof(MEPackage) + " streamloader can only be initialized once");
             }
 
-            isStreamLoaderRegistered = true;
-            return (s, associatedFilePath) => new MEPackage(s, associatedFilePath);
+            _isStreamLoaderRegistered = true;
+            return (s, associatedFilePath, onlyheader, dataLoadPredicate) => new MEPackage(s, associatedFilePath, onlyheader, dataLoadPredicate);
         }
 
         /// <summary>
@@ -236,6 +201,7 @@ namespace LegendaryExplorerCore.Packages
             exports = new List<ExportEntry>();
             //new Package
             Game = game;
+            Platform = GamePlatform.PC; //Platform must be set or saving code will throw exception (cannot save non-PC platforms)
             //reasonable defaults?
             Flags = EPackageFlags.Cooked | EPackageFlags.AllowDownload | EPackageFlags.DisallowLazyLoading | EPackageFlags.RequireImportsAlreadyLoaded;
             EntryLookupTable = new CaseInsensitiveDictionary<IEntry>();
@@ -247,7 +213,7 @@ namespace LegendaryExplorerCore.Packages
         /// <param name="fs"></param>
         /// <param name="filePath"></param>
         /// <param name="onlyHeader">Only read header data. Do not load the tables or decompress</param>
-        private MEPackage(Stream fs, string filePath = null, bool onlyHeader = false) : base(filePath != null ? File.Exists(filePath) ? Path.GetFullPath(filePath) : filePath : null)
+        private MEPackage(Stream fs, string filePath = null, bool onlyHeader = false, Func<ExportEntry, bool> dataLoadPredicate = null) : base(filePath != null ? File.Exists(filePath) ? Path.GetFullPath(filePath) : filePath : null)
         {
             //MemoryStream fs = new MemoryStream(File.ReadAllBytes(filePath));
             //Debug.WriteLine($"Reading MEPackage from stream starting at position 0x{fs.Position:X8}");
@@ -265,7 +231,7 @@ namespace LegendaryExplorerCore.Packages
             GamePlatform platformOverride = GamePlatform.Unknown; //Used to help differentiate beteween PS3 and Xenon ME3
             CompressionType fcCompressionType = CompressionType.None;
 
-            if ((versionLicenseePacked == 0x00020000 || versionLicenseePacked == 0x00010000) && Endian == Endian.Little)
+            if ((versionLicenseePacked is 0x00020000 or 0x00010000) && Endian == Endian.Little)
             {
                 if (versionLicenseePacked == 0x20000)
                 {
@@ -434,7 +400,7 @@ namespace LegendaryExplorerCore.Packages
             packageReader.SkipInt32(); //engineVersion          Like unrealVersion and licenseeVersion, these 2 are determined by what game this is,
             packageReader.SkipInt32(); //cookedContentVersion   so we don't have to read them in
 
-            if ((Game == MEGame.ME2 || Game == MEGame.ME1) && Platform != GamePlatform.PS3) //PS3 on ME3 engine
+            if ((Game is MEGame.ME2 or MEGame.ME1) && Platform != GamePlatform.PS3) //PS3 on ME3 engine
             {
                 packageReader.SkipInt32(); //always 0
                 packageReader.SkipInt32(); //always 47699
@@ -457,7 +423,7 @@ namespace LegendaryExplorerCore.Packages
 
             //COMPRESSION AND COMPRESSION CHUNKS
             var compressionFlagPosition = packageReader.Position;
-            var compressionType = (UnrealPackageFile.CompressionType)packageReader.ReadInt32();
+            var compressionType = (CompressionType)packageReader.ReadInt32();
             if (platformNeedsResolved && compressionType != CompressionType.None)
             {
                 Platform = compressionType == CompressionType.LZX ? GamePlatform.Xenon : GamePlatform.PS3;
@@ -475,7 +441,7 @@ namespace LegendaryExplorerCore.Packages
 
             packageSource = packageReader.ReadUInt32(); //this needs to be read in so it can be properly written back out.
 
-            if ((Game == MEGame.ME2 || Game == MEGame.ME1) && Platform != GamePlatform.PS3)
+            if ((Game is MEGame.ME2 or MEGame.ME1) && Platform != GamePlatform.PS3)
             {
                 packageReader.SkipInt32(); //always 0
             }
@@ -507,15 +473,10 @@ namespace LegendaryExplorerCore.Packages
 
             packageReader.Position = savedPos; //restore position to chunk table
             Stream inStream = fs;
-            bool readExportDataInConstructor = true;
             if (IsCompressed && NumCompressedChunksAtLoad > 0)
             {
                 inStream = CompressionHelper.DecompressPackage(packageReader, compressionFlagPosition, game: Game, platform: Platform,
                                                                canUseLazyDecompression: tablesInOrder && !platformNeedsResolved);
-                if (inStream is CompressionHelper.PackageDecompressionStream)
-                {
-                    readExportDataInConstructor = false;
-                }
             }
             #endregion
 
@@ -546,12 +507,12 @@ namespace LegendaryExplorerCore.Packages
                 imports.Add(imp);
             }
 
-            //read exportTable (ExportEntry constructor reads export data if readExportDataInConstructor is true)
+            //read exportTable
             inStream.JumpTo(ExportOffset);
             exports = new List<ExportEntry>(ExportCount);
             for (int i = 0; i < ExportCount; i++)
             {
-                var e = new ExportEntry(this, packageReader, readExportDataInConstructor) { Index = i };
+                var e = new ExportEntry(this, packageReader, false) { Index = i };
                 if (MEPackageHandler.GlobalSharedCacheEnabled)
                     e.PropertyChanged += exportChanged; // If packages are not shared there is no point to attaching this
                 exports.Add(e);
@@ -588,17 +549,14 @@ namespace LegendaryExplorerCore.Packages
                 }
             }
 
-            if (!readExportDataInConstructor)
+            foreach (ExportEntry export in dataLoadPredicate is null ? exports : exports.Where(dataLoadPredicate))
             {
-                foreach (var export in Exports)
-                {
-                    inStream.JumpTo(export.DataOffset);
-                    export.Data = packageReader.ReadBytes(export.DataSize);
-                }
+                inStream.JumpTo(export.DataOffset);
+                export.Data = packageReader.ReadBytes(export.DataSize);
             }
 
             packageReader.Dispose();
-            if (Game.IsGame1() && Platform == GamePlatform.PC)
+            if (dataLoadPredicate is null && Game.IsGame1() && Platform == GamePlatform.PC)
             {
                 ReadLocalTLKs();
             }
@@ -606,52 +564,7 @@ namespace LegendaryExplorerCore.Packages
 
             if (filePath != null)
             {
-
-                string localizationName = Path.GetFileNameWithoutExtension(filePath).ToUpper();
-                if (localizationName.Length > 8)
-                {
-                    var loc = localizationName.LastIndexOf("LOC_", StringComparison.OrdinalIgnoreCase);
-                    if (loc > 0)
-                    {
-                        localizationName = localizationName.Substring(loc);
-                    }
-                }
-                switch (localizationName)
-                {
-                    case "LOC_DEU":
-                    case "LOC_DE":
-                        Localization = MELocalization.DEU;
-                        break;
-                    case "LOC_ESN":
-                        Localization = MELocalization.ESN;
-                        break;
-                    case "LOC_FRA":
-                    case "LOC_FR":
-                        Localization = MELocalization.FRA;
-                        break;
-                    case "LOC_INT":
-                        Localization = MELocalization.INT;
-                        break;
-                    case "LOC_ITA":
-                    case "LOC_IT":
-                        Localization = MELocalization.ITA;
-                        break;
-                    case "LOC_JPN":
-                        Localization = MELocalization.JPN;
-                        break;
-                    case "LOC_POL":
-                    case "LOC_PLPC":
-                    case "LOC_PL":
-                        Localization = MELocalization.POL;
-                        break;
-                    case "LOC_RUS":
-                    case "LOC_RA":
-                        Localization = MELocalization.RUS;
-                        break;
-                    default:
-                        Localization = MELocalization.None;
-                        break;
-                }
+                Localization = filePath.GetUnrealLocalization();
             }
 
             EntryLookupTable = new CaseInsensitiveDictionary<IEntry>(ExportCount + ImportCount);
@@ -738,8 +651,8 @@ namespace LegendaryExplorerCore.Packages
                     break;
             }
 
-            int importTableSize = mePackage.imports.Count * ImportEntry.headerSize;
-            int exportTableSize = mePackage.exports.Sum(exp => exp.Header.Length);
+            int importTableSize = mePackage.imports.Count * ImportEntry.HeaderLength;
+            int exportTableSize = mePackage.exports.Sum(exp => exp.HeaderLength);
             int dependencyTableSize = includeDependencyTable ? mePackage.ExportCount * 4 : 4;
             int totalSize = 500 //fake header size. will mean allocating a few hundred extra bytes, but that's not a huge deal.
                           + nameTableSize
@@ -784,18 +697,18 @@ namespace LegendaryExplorerCore.Packages
             //import table
             mePackage.ImportOffset = (int)ms.Position;
             mePackage.ImportCount = mePackage.imports.Count;
-            foreach (ImportEntry e in mePackage.imports)
+            foreach (ImportEntry imp in mePackage.imports)
             {
-                ms.WriteFromBuffer(e.Header);
+                imp.SerializeHeader(ms);
             }
 
             //export table
             mePackage.ExportOffset = (int)ms.Position;
             mePackage.ExportCount = mePackage.Gen0ExportCount = mePackage.exports.Count;
-            foreach (ExportEntry e in mePackage.exports)
+            foreach (ExportEntry exp in mePackage.exports)
             {
-                e.HeaderOffset = (int)ms.Position;
-                ms.WriteFromBuffer(e.Header);
+                exp.HeaderOffset = (int)ms.Position;
+                exp.SerializeHeader(ms);
             }
 
             mePackage.DependencyTableOffset = (int)ms.Position;
@@ -913,8 +826,8 @@ namespace LegendaryExplorerCore.Packages
                 }
 
 
-                int importTableSize = package.imports.Count * ImportEntry.headerSize;
-                int exportTableSize = package.exports.Sum(exp => exp.Header.Length);
+                int importTableSize = package.imports.Count * ImportEntry.HeaderLength;
+                int exportTableSize = package.exports.Sum(exp => exp.HeaderLength);
                 int dependencyTableSize = (includeDependencyTable ? package.ExportCount * 4 : 4);
                 int totalSize = 500 //fake header size.
                               + nameTableSize
@@ -939,7 +852,7 @@ namespace LegendaryExplorerCore.Packages
                 foreach (ExportEntry export in package.exports)
                 {
                     export.HeaderOffset = offset;
-                    offset += export.Header.Length;
+                    offset += export.HeaderLength;
                 }
                 package.DependencyTableOffset = offset;
                 package.FullHeaderSize = package.ImportExportGuidsOffset = offset + dependencyTableSize;
@@ -1033,13 +946,13 @@ namespace LegendaryExplorerCore.Packages
                     if (ms.Position != nameTableSize)
                         throw new Exception(@"INVALID NAME TABLE SIZE! Check that the serialized size and calculated size make sense (e.g. 0 length strings)");
 #endif
-                    foreach (ImportEntry e in package.imports)
+                    foreach (ImportEntry imp in package.imports)
                     {
-                        ms.WriteFromBuffer(e.Header);
+                        imp.SerializeHeader(ms);
                     }
-                    foreach (ExportEntry e in package.exports)
+                    foreach (ExportEntry exp in package.exports)
                     {
-                        ms.WriteFromBuffer(e.Header);
+                        exp.SerializeHeader(ms);
                     }
                     Array.Clear(uncompressedData, (int)ms.Position, dependencyTableSize);
                     positionInChunkData = (int)ms.Position + dependencyTableSize;

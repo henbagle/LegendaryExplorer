@@ -1,9 +1,8 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Linq;
 using LegendaryExplorer.Misc;
+using LegendaryExplorer.Tools.TlkManagerNS;
 using LegendaryExplorerCore.Helpers;
-using LegendaryExplorerCore.ME1;
 using LegendaryExplorerCore.Misc;
 using LegendaryExplorerCore.Packages;
 using LegendaryExplorerCore.Unreal;
@@ -62,7 +61,7 @@ namespace LegendaryExplorer.Tools.InterpEditor
                     {
                         Tracks.Add(new BioEvtSysTrackGesture(trackExport));
                     }
-                    else if(trackExport.IsA("BioInterpTrack"))
+                    else if (trackExport.IsA("BioInterpTrack"))
                     {
                         Tracks.Add(new BioInterpTrack(trackExport));
                     }
@@ -202,9 +201,9 @@ namespace LegendaryExplorer.Tools.InterpEditor
         {
             Keys.ClearEx();
             var floatTrackProp = Export.GetProperty<StructProperty>("FloatTrack");
-            if (floatTrackProp != null)
+            if (floatTrackProp?.GetProp<ArrayProperty<StructProperty>>("Points") is { } pointsArray)
             {
-                foreach (var curvePoint in floatTrackProp.GetPropOrDefault<ArrayProperty<StructProperty>>("Points"))
+                foreach (var curvePoint in pointsArray)
                 {
                     Keys.Add(new Key(curvePoint.GetProp<FloatProperty>("InVal"), curvePoint.GetProp<FloatProperty>("OutVal").Value.ToString()));
                 }
@@ -221,9 +220,9 @@ namespace LegendaryExplorer.Tools.InterpEditor
         {
             Keys.ClearEx();
             var vectorTrackProp = Export.GetProperty<StructProperty>("VectorTrack");
-            if (vectorTrackProp != null)
+            if (vectorTrackProp?.GetProp<ArrayProperty<StructProperty>>("Points") is { } pointsArray)
             {
-                foreach (var curvePoint in vectorTrackProp.GetPropOrDefault<ArrayProperty<StructProperty>>("Points"))
+                foreach (var curvePoint in pointsArray)
                 {
                     (float x, float y, float z) = CommonStructs.GetVector3(curvePoint.GetProp<StructProperty>("OutVal"));
                     Keys.Add(new Key(curvePoint.GetProp<FloatProperty>("InVal"), $"X={x},Y={y},Z={z}"));
@@ -242,10 +241,9 @@ namespace LegendaryExplorer.Tools.InterpEditor
             Keys.ClearEx();
             var vectorTrackProp = Export.GetProperty<StructProperty>("VectorTrack");
             var sounds = Export.GetProperty<ArrayProperty<StructProperty>>("Sounds");
-            if (vectorTrackProp != null)
+            if (vectorTrackProp?.GetProp<ArrayProperty<StructProperty>>("Points") is { } points)
             {
                 int keyindex = 0;
-                var points = vectorTrackProp.GetPropOrDefault<ArrayProperty<StructProperty>>("Points");
                 foreach (var curvePoint in points)
                 {
                     int? soundUIndex = sounds?.Count > keyindex ? sounds?[keyindex].GetProp<ObjectProperty>("Sound")?.Value : null;
@@ -277,7 +275,7 @@ namespace LegendaryExplorer.Tools.InterpEditor
             {
                 foreach (var trackKey in trackKeys)
                 {
-                    Keys.Add(new Key(trackKey.GetProp<FloatProperty>("StartTime"), trackKey.GetProp<NameProperty>("EventName").Value.Name));
+                    Keys.Add(new Key(trackKey.GetProp<FloatProperty>(Export.Game.IsGame1() ? "Time" : "StartTime"), trackKey.GetProp<NameProperty>("EventName").Value.Name));
                 }
             }
         }
@@ -471,7 +469,7 @@ namespace LegendaryExplorer.Tools.InterpEditor
                 foreach (var trackKey in trackKeys)
                 {
                     int strRef = subtitleData?[keyindex]?.GetProp<IntProperty>("nStrRefID");
-                    Keys.Add(new Key(trackKey.GetProp<FloatProperty>("fTime"), ME1TalkFiles.findDataById(strRef, Export.FileRef)));
+                    Keys.Add(new Key(trackKey.GetProp<FloatProperty>("fTime"), TLKManagerWPF.GlobalFindStrRefbyID(strRef, Export.FileRef)));
                 }
             }
         }

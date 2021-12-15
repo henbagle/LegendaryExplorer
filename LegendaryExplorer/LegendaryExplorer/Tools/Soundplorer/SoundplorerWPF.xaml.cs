@@ -201,7 +201,7 @@ namespace LegendaryExplorer.Tools.Soundplorer
             using (FileStream fileStream = new((string)e.Argument, FileMode.Open, FileAccess.Read))
             {
                 // Get endianness
-                Endian endianness = null;
+                Endian? endianness = null;
 
                 if (fileStream.Position < fileStream.Length - 4)
                 {
@@ -219,7 +219,7 @@ namespace LegendaryExplorer.Tools.Soundplorer
                 }
 
                 fileStream.Position = 0;
-                var reader = new EndianReader(fileStream) { Endian = endianness };
+                var reader = new EndianReader(fileStream) { Endian = endianness.Value };
 
                 while (fileStream.Position < fileStream.Length - 4)
                 {
@@ -853,7 +853,8 @@ namespace LegendaryExplorer.Tools.Soundplorer
             WwiseCliHandler.DeleteTemplateProjectDirectory();
 
             // Shows wwise path dialog if no paths are set
-            Soundpanel.CheckWwisePathForGame(Pcc?.Game ?? MEGame.ME3);
+            var pathCorrect = WwiseCliHandler.CheckWwisePathForGame(Pcc?.Game ?? MEGame.ME3);
+            if (!pathCorrect) return;
 
             var dlg = new CommonOpenFileDialog("Select folder containing .wav files") { IsFolderPicker = true };
             if (dlg.ShowDialog(this) != CommonFileDialogResult.Ok) { return; }
@@ -1109,7 +1110,7 @@ namespace LegendaryExplorer.Tools.Soundplorer
             }
         }
 
-        public void PropogateRecentsChange(IEnumerable<RecentsControl.RecentItem> newRecents)
+        public void PropogateRecentsChange(string propogationSource, IEnumerable<RecentsControl.RecentItem> newRecents)
         {
             RecentsController.PropogateRecentsChange(false, newRecents);
         }

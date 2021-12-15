@@ -74,6 +74,17 @@ namespace LegendaryExplorer.Tools.FaceFXEditor
             return SelectedExport != null;
         }
 
+        public void SelectAnimset(int uIndex, string lineName = null)
+        {
+            if (Pcc is null || !Pcc.IsUExport(uIndex)) return;
+            SelectedExport = Pcc.GetUExport(uIndex);
+            LoadAnimset();
+            if (lineName != null)
+            {
+                editorControl.SelectLineByName(lineName);
+            }
+        }
+
         private void LoadAnimset()
         {
             editorControl.SaveChanges();
@@ -216,7 +227,7 @@ namespace LegendaryExplorer.Tools.FaceFXEditor
             }
         }
 
-        public void PropogateRecentsChange(IEnumerable<RecentsControl.RecentItem> newRecents)
+        public void PropogateRecentsChange(string propogationSource, IEnumerable<RecentsControl.RecentItem> newRecents)
         {
             RecentsController.PropogateRecentsChange(false, newRecents);
         }

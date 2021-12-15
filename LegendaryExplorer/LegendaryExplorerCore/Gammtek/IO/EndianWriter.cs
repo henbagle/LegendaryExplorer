@@ -17,10 +17,12 @@ using System;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using LegendaryExplorerCore.Gammtek.Extensions;
 using LegendaryExplorerCore.Gammtek.IO.Converters;
 using LegendaryExplorerCore.Helpers;
+using LegendaryExplorerCore.Memory;
 
 namespace LegendaryExplorerCore.Gammtek.IO
 {
@@ -32,7 +34,7 @@ namespace LegendaryExplorerCore.Gammtek.IO
     ///     character data uses the provided encoding and does not perform any
     ///     Endian swapping with the data.
     /// </summary>
-    public class EndianWriter : BinaryWriter
+    public sealed class EndianWriter : BinaryWriter
     {
         private bool NoConvert;
         private Endian _endian;
@@ -43,8 +45,8 @@ namespace LegendaryExplorerCore.Gammtek.IO
         /// </summary>
         public EndianWriter(Stream stream, Encoding encoding) : base(stream, encoding)
         {
-            Endian = BitConverter.IsLittleEndian ? Endian.Little : Endian.Big;
-            NoConvert = Endian == Endian.Native;
+            Endian = Endian.Native;
+            NoConvert = Endian.IsNative;
         }
 
         /// <summary>
@@ -58,7 +60,7 @@ namespace LegendaryExplorerCore.Gammtek.IO
         ///     Initializes a new instance of the <see cref="EndianWriter" /> class.
         /// </summary>
         public EndianWriter()
-            : this(null, Encoding.UTF8) { }
+            : this(MemoryManager.GetMemoryStream(), Encoding.UTF8) { }
 
         /// <summary>
         ///     The Endian setting of the stream.
@@ -68,7 +70,7 @@ namespace LegendaryExplorerCore.Gammtek.IO
             get => _endian;
             set { 
                 _endian = value;
-                NoConvert = _endian == Endian.Native;
+                NoConvert = _endian.IsNative;
             }
         }
 
@@ -157,7 +159,7 @@ namespace LegendaryExplorerCore.Gammtek.IO
             //    charsets.Add(asciistr.Substring(i * 4, 4).ToCharArray());
             //    if (Endian == Endian.Big) charsets[i].Reverse();
             //}
-            base.BaseStream.WriteStringLatin1(asciistr);
+            OutStream.WriteStringLatin1(asciistr);
             //foreach (var charset in charsets)
             //{
             //    foreach (var c in charset)
@@ -176,6 +178,13 @@ namespace LegendaryExplorerCore.Gammtek.IO
         {
             Write(buffer);
         }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            OutStream.Write(buffer);
+        }
+
+
 
         public void WriteBytes(byte[] bytes) => WriteFromBuffer(bytes);
 
@@ -237,6 +246,37 @@ namespace LegendaryExplorerCore.Gammtek.IO
         public void WriteZeros(int count)
         {
             Write(new byte[count]);
+        }
+
+        public void WriteGuid(Guid value)
+        {
+            Span<byte> data = stackalloc byte[16];
+            MemoryMarshal.Write(data, ref value);
+
+            if (NoConvert)
+            {
+                Write(data);
+                return;
+            }
+
+            WriteInt32(BitConverter.ToInt32(data));
+            WriteInt16(BitConverter.ToInt16(data.Slice(4)));
+            WriteInt16(BitConverter.ToInt16(data.Slice(6)));
+            Write(data.Slice(8));
+        }
+
+        /// <summary>
+        /// Copies stream to a new array. Consider using a more performant method if at all possible.
+        /// </summary>
+        /// <returns></returns>
+        public byte[] ToArray()
+        {
+            Stream baseStream = BaseStream;
+            var pos = baseStream.Position;
+            baseStream.Position = 0;
+            var data = baseStream.ReadToBuffer(pos);
+            baseStream.Position = pos;
+            return data;
         }
     }
 }

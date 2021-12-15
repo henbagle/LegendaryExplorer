@@ -5,7 +5,6 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using LegendaryExplorerCore.Helpers;
-using LegendaryExplorerCore.Unreal;
 using LegendaryExplorerCore.UnrealScript.Analysis.Symbols;
 using LegendaryExplorerCore.UnrealScript.Language.Tree;
 using LegendaryExplorerCore.UnrealScript.Lexing.Tokenizing;
@@ -136,10 +135,6 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             {
                 Write("perobjectconfig", EF.Specifier);
             }
-            if (flags.Has(EClassFlags.Localized))
-            {
-                Write("localized", EF.Specifier);
-            }
             if (flags.Has(EClassFlags.Abstract))
             {
                 Write("abstract", EF.Specifier);
@@ -206,6 +201,21 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                     state.AcceptVisitor(this);
             }
 
+            if (node.ReplicationBlock?.Statements.Count > 0)
+            {
+                Write();
+                if (node.Flags.Has(EClassFlags.NativeReplication))
+                {
+                    Write("//Replication conditions for this class are native. This block has no effect", EF.Comment);
+                }
+                Write(REPLICATION, EF.Keyword);
+                Write("{");
+                NestingLevel++;
+                node.ReplicationBlock.AcceptVisitor(this);
+                NestingLevel--;
+                Write("}");
+            }
+
             Write();
             Write("//class default properties can be edited in the Properties tab for the class's Default__ object.", EF.Comment);
             node.DefaultProperties?.AcceptVisitor(this);
@@ -253,23 +263,23 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
         {
             switch (node)
             {
-                case StaticArrayType _:
-                case DynamicArrayType _:
-                case DelegateType _:
-                case ClassType _:
+                case StaticArrayType:
+                case DynamicArrayType:
+                case DelegateType:
+                case ClassType:
                     node.AcceptVisitor(this);
                     break;
-                case Enumeration _:
+                case Enumeration:
                     Append(node.Name, EF.Enum);
                     break;
-                case Const _:
+                case Const:
                     Append(node.Name);
                     break;
-                case VariableType v when SymbolTable.IsPrimitive(v):
+                case PrimitiveType:
                     Append(node.Name, EF.Keyword);
                     break;
-                case Class _:
-                case Struct _:
+                case Class:
+                case Struct:
                 default:
                     Append(node.Name, EF.TypeName);
                     break;
@@ -349,6 +359,10 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             if (flags.Has(ScriptStructFlags.StrictConfig))
             {
                 specs.Add("strictconfig");
+            }
+            if (flags.Has(ScriptStructFlags.UnkStructFlag))
+            {
+                specs.Add(nameof(ScriptStructFlags.UnkStructFlag).ToLowerInvariant());
             }
 
             foreach (string spec in specs)
@@ -718,9 +732,9 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             Append("=", EF.Operator);
             Append(node.Class.Name, EF.TypeName);
             Space();
-            Append(NAME, EF.Keyword);
+            Append("Name", EF.Keyword);
             Append("=", EF.Operator);
-            Append(node.Name.Name);
+            Append(node.NameDeclaration.Name);
 
             NestingLevel++;
             foreach (Statement s in node.Statements)
@@ -957,7 +971,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             }
             else if (node.ErrorTokens != null)
             {
-                foreach (Token<string> errorToken in node.ErrorTokens)
+                foreach (ScriptToken errorToken in node.ErrorTokens)
                 {
                     Append(errorToken.Value, EF.ERROR);
                 }
@@ -981,7 +995,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             }
             else if (node.ErrorTokens != null)
             {
-                foreach (Token<string> errorToken in node.ErrorTokens)
+                foreach (ScriptToken errorToken in node.ErrorTokens)
                 {
                     Append(errorToken.Value, EF.ERROR);
                 }
@@ -999,6 +1013,29 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
         {
             // if (condition) { /n contents /n } [else...]
             VisitIf(node);
+            return true;
+        }
+
+        public bool VisitNode(ReplicationStatement node)
+        {
+            Write(IF, EF.Keyword);
+            Space();
+            Append("(");
+            node.Condition.AcceptVisitor(this);
+            Append(")");
+            NestingLevel++;
+            Write();
+            for (int i = 0; i < node.ReplicatedVariables.Count; i++)
+            {
+                if (i > 0)
+                {
+                    Append(", ");
+                }
+                node.ReplicatedVariables[i].AcceptVisitor(this);
+            }
+            NestingLevel--;
+            Append(";");
+            Write();
             return true;
         }
 
@@ -1830,7 +1867,7 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
 
             if (flags.Has(EPropertyFlags.AlwaysInit))
             {
-                specs.Add("alwaysinit");
+                specs.Add("init");
             }
 
             if (flags.Has(EPropertyFlags.DataBinding))

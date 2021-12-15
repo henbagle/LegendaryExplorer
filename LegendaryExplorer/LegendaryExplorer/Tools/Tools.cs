@@ -29,6 +29,7 @@ using LegendaryExplorerCore.GameFilesystem;
 using LegendaryExplorerCore.Packages;
 using System.Text;
 using LegendaryExplorer.Tools.ClassViewer;
+using LegendaryExplorer.Tools.PlotDatabase;
 
 namespace LegendaryExplorer
 {
@@ -348,11 +349,11 @@ namespace LegendaryExplorer
             set.Add(new Tool
             {
                 name = "TLK Editor",
-                type = typeof(TLKEditor),
+                type = typeof(TLKEditorExportLoader),
                 icon = Application.Current.FindResource("iconTLKEditor") as ImageSource,
                 open = () =>
                 {
-                    var elhw = new ExportLoaderHostedWindow(new TLKEditor())
+                    var elhw = new ExportLoaderHostedWindow(new TLKEditorExportLoader())
                     {
                         Title = $"TLK Editor"
                     };
@@ -531,22 +532,20 @@ namespace LegendaryExplorer
                 category = "Core Editors",
                 description = "Plot Editor is used to examine, edit, and search plot maps in all 3 games for quests, state events, and codex entries."
             });
-#if DEBUG
             set.Add(new Tool
             {
                 name = "Plot Database",
-                type = typeof(Tools.PlotManager.PlotManagerWindow),
+                type = typeof(PlotManagerWindow),
                 icon = Application.Current.FindResource("iconPlotDatabase") as ImageSource,
                 open = () =>
                 {
-                    var plotMan = new Tools.PlotManager.PlotManagerWindow();
+                    var plotMan = new PlotManagerWindow();
                     plotMan.Show();
                 },
                 tags = new List<string> { "developer", "codex", "state transition", "quest", "plots", "database", "conditional" },
                 category = "Core Editors",
                 description = "Plot Database is used to view and create databases of plot elements from all three games. This tool is for reference only, and affects nothing in game."
             });
-#endif
             set.Add(new Tool
             {
                 name = "Sequence Editor",

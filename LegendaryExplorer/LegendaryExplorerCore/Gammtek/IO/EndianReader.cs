@@ -40,7 +40,7 @@ namespace LegendaryExplorerCore.Gammtek.IO
     ///     the system and the stream.
     /// You can write data through the Writer member.
     /// </summary>
-    public class EndianReader : BinaryReader
+    public sealed class EndianReader : BinaryReader
     {
         public readonly EndianWriter Writer;
         private bool NoConvert;
@@ -55,7 +55,7 @@ namespace LegendaryExplorerCore.Gammtek.IO
             set
             {
                 _endian = value;
-                NoConvert = _endian == Endian.Native;
+                NoConvert = _endian.IsNative;
                 if (Writer != null)
                 {
                     Writer.Endian = Endian;
@@ -72,10 +72,9 @@ namespace LegendaryExplorerCore.Gammtek.IO
         {
             if (input.CanWrite)
             {
-                Writer = new EndianWriter(input);
+                Writer = new EndianWriter(input, encoding);
             }
-            Endian = BitConverter.IsLittleEndian ? Endian.Little : Endian.Big;
-            NoConvert = Endian == Endian.Native;
+            Endian = Endian.Native;
         }
 
         /// <summary>
@@ -94,16 +93,12 @@ namespace LegendaryExplorerCore.Gammtek.IO
         }
 
         /// <summary>
-        ///     Initializes a new instance of the <see cref="EndianReader" /> class
+        ///     Initializes a new read-only instance of the <see cref="EndianReader" /> class
         ///     using byte array <paramref name="input" />.
         /// </summary>
-        public EndianReader(byte[] input, Endian endian = null)
-            : this(new MemoryStream(input), Encoding.UTF8)
+        public EndianReader(byte[] input)
+            : this(new MemoryStream(input, false), Encoding.UTF8)
         {
-            if (endian != null)
-            {
-                Endian = endian;
-            }
         }
 
         /// <summary>
@@ -438,6 +433,27 @@ namespace LegendaryExplorerCore.Gammtek.IO
             }
 
             return val;
+        }
+        public Guid ReadGuid()
+        {
+            Span<byte> span = stackalloc byte[16];
+            Read(span);
+            if (!NoConvert)
+            {
+                return new Guid(
+                    BinaryPrimitives.ReadInt32BigEndian(span),
+                    BinaryPrimitives.ReadInt16BigEndian(span[4..]),
+                    BinaryPrimitives.ReadInt16BigEndian(span[6..]),
+                    span[8],
+                    span[9],
+                    span[10],
+                    span[11],
+                    span[12],
+                    span[13],
+                    span[14],
+                    span[15]);
+            }
+            return MemoryMarshal.Read<Guid>(span);
         }
 
         /// <summary>
@@ -808,7 +824,7 @@ namespace LegendaryExplorerCore.Gammtek.IO
                 return new Guid(
                     BinaryPrimitives.ReadInt32BigEndian(span),
                     BinaryPrimitives.ReadInt16BigEndian(span.Slice(4)),
-                    BinaryPrimitives.ReadInt16BigEndian(span.Slice(8)),
+                    BinaryPrimitives.ReadInt16BigEndian(span.Slice(6)),
                     span[8],
                     span[9],
                     span[10],

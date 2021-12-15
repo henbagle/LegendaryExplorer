@@ -52,8 +52,18 @@ namespace LegendaryExplorerCore.Unreal
             PerObjectLocalized = 0x40000000,
             HasCrossLevelRefs = 0x80000000,
 
-            Inherit = Transient | Config | Localized | SafeReplace | PerObjectConfig | PerObjectLocalized | Placeable
-                    | HasComponents | Deprecated | Intrinsic | HasInstancedProps | HasCrossLevelRefs
+            Inherit = //Transient |
+                      Config |
+                      Localized |
+                      SafeReplace |
+                      PerObjectConfig |
+                      PerObjectLocalized |
+                      Placeable |
+                      HasComponents |
+                      Deprecated |
+                      Intrinsic |
+                      HasInstancedProps |
+                      HasCrossLevelRefs
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -235,7 +245,7 @@ namespace LegendaryExplorerCore.Unreal
             [EPropertyFlags.Travel] = "",
             [EPropertyFlags.EditConst] = "",
             [EPropertyFlags.GlobalConfig] = "",
-            //[EPropertyFlags.Component] = "",
+            [EPropertyFlags.EditInline] = "",
             [EPropertyFlags.AlwaysInit] = "",
             [EPropertyFlags.DuplicateTransient] = "",
             [EPropertyFlags.NeedCtorLink] = "",
@@ -418,6 +428,7 @@ namespace LegendaryExplorerCore.Unreal
             StrictConfig = 0x00000040,
             ImmutableWhenCooked = 0x00000080,
             AtomicWhenCooked = 0x00000100,
+            UnkStructFlag = 0x00020000,
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

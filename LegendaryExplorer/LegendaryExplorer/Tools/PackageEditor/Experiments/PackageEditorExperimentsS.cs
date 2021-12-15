@@ -30,7 +30,6 @@ using Microsoft.WindowsAPICodePack.Dialogs;
 using Newtonsoft.Json;
 using SharpDX.D3DCompiler;
 using static LegendaryExplorerCore.Unreal.UnrealFlags;
-using Function = LegendaryExplorerCore.UnrealScript.Language.Tree.Function;
 
 namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 {
@@ -86,7 +85,6 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 EntryPruner.TrashEntriesAndDescendants(shadowMapsToTrash);
 
                 using IMEPackage otPcc = MEPackageHandler.OpenME3Package(otFilePath);
-                var relinkMap = new Dictionary<IEntry, IEntry>();
                 foreach (UIndex uIndex in levelBin.Actors)
                 {
                     if (uIndex.GetEntry(pcc) is ExportEntry actor)
@@ -97,11 +95,11 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
                             PortShadowMap(otsmcExp, smcExp);
                         }
-                        else if (actor.ClassName.CaseInsensitiveEquals("StaticMeshCollectionActor") && actor.GetProperty<ArrayProperty<ObjectProperty>>("StaticMeshComponents") is {} smcArray)
+                        else if (actor.ClassName.CaseInsensitiveEquals("StaticMeshCollectionActor") && actor.GetProperty<ArrayProperty<ObjectProperty>>("StaticMeshComponents") is { } smcArray)
                         {
                             foreach (ObjectProperty objProp in smcArray)
                             {
-                                if (objProp.ResolveToEntry(pcc) is ExportEntry {ObjectName: {Instanced: var smcName}} smcExport && otPcc.Exports.FirstOrDefault(exp => exp.ObjectName.Instanced.CaseInsensitiveEquals(smcName)) is ExportEntry otsmcExport)
+                                if (objProp.ResolveToEntry(pcc) is ExportEntry { ObjectName: { Instanced: var smcName } } smcExport && otPcc.Exports.FirstOrDefault(exp => exp.ObjectName.Instanced.CaseInsensitiveEquals(smcName)) is ExportEntry otsmcExport)
                                 {
                                     PortShadowMap(otsmcExport, smcExport);
                                 }
@@ -126,7 +124,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
                 void PortShadowMap(ExportEntry otsmcExp, ExportEntry smcExp)
                 {
-                    if (otsmcExp.GetProperty<ArrayProperty<StructProperty>>("IrrelevantLights") is {} irrelevantLightsProp)
+                    if (otsmcExp.GetProperty<ArrayProperty<StructProperty>>("IrrelevantLights") is { } irrelevantLightsProp)
                     {
                         smcExp.WriteProperty(irrelevantLightsProp);
                     }
@@ -159,14 +157,20 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         EntryPruner.TrashEntryAndDescendants(shadowMaps[0].GetEntry(pcc));
                     }
 
+                    RelinkerOptionsPackage rop = new RelinkerOptionsPackage()
+                    {
+                        Cache = null, // Maintains original behavior of this func (09/30/2021: Change to RelinkerOptionsPackage)
+                        ImportExportDependencies = true,
+                    };
+
                     var results = EntryImporter.ImportAndRelinkEntries(EntryImporter.PortingOption.CloneAllDependencies,
-                        otShadowMaps[0].GetEntry(otPcc), pcc, smcExp, true, out IEntry leShadowMap, relinkMap);
+                        otShadowMaps[0].GetEntry(otPcc), pcc, smcExp, true, rop, out IEntry leShadowMap);
                     if (results?.Count > 0)
                     {
                         Debugger.Break();
                     }
 
-                    smcBin.LODData[0].ShadowMaps = new UIndex[] {leShadowMap.UIndex};
+                    smcBin.LODData[0].ShadowMaps = new UIndex[] { leShadowMap.UIndex };
                     smcExp.WriteBinary(smcBin);
                 }
             }).ContinueWithOnUIThread(prevTask =>
@@ -265,9 +269,10 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             pewpf.BusyText = "Re-serializing all binary in LE2 and LE3";
             var interestingExports = new List<EntryStringPair>();
             var comparisonDict = new Dictionary<string, (byte[] original, byte[] newData)>();
+            var classesMissingObjBin = new List<string>();
             Task.Run(() =>
             {
-                foreach (string filePath in EnumerateOfficialFiles(MEGame.LE1, MEGame.LE2, MEGame.LE3))
+                foreach (string filePath in EnumerateOfficialFiles(MEGame.LE1/*, MEGame.LE2, MEGame.LE3*/))
                 {
                     using IMEPackage pcc = MEPackageHandler.OpenMEPackage(filePath);
                     foreach (ExportEntry export in pcc.Exports)
@@ -284,6 +289,17 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                                     comparisonDict.Add($"{export.UIndex} {export.FileRef.FilePath}", (original, export.Data));
                                 }
                             }
+                            else
+                            {
+                                // Binary class is not defined for this
+                                // Check to make sure there is in fact no binary so 
+                                // we aren't missing anything
+                                if (export.propsEnd() != export.DataSize && !classesMissingObjBin.Contains(export.ClassName))
+                                {
+                                    classesMissingObjBin.Add(export.ClassName);
+                                    interestingExports.Add(new EntryStringPair($"{export.ClassName} Export has data after properties but no objectbinary class exists for this "));
+                                }
+                            }
                         }
                         catch (Exception e)
                         {
@@ -291,10 +307,11 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         }
                     }
 
-                    if (interestingExports.Count >= 2)
-                    {
-                        return;
-                    }
+                    // Uncomment this if you don't want it to do a lot before stopping
+                    //if (interestingExports.Count >= 2)
+                    //{
+                    //    return;
+                    //}
                 }
             }).ContinueWithOnUIThread(prevTask =>
             {
@@ -389,7 +406,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             var oodleData = new List<CompressionData>();
             Task.Run(() =>
             {
-                foreach (MEGame game in new []{MEGame.LE1, MEGame.LE2, MEGame.LE3})//, MEGame.ME1, MEGame.ME2, MEGame.ME3})
+                foreach (MEGame game in new[] { MEGame.LE1, MEGame.LE2, MEGame.LE3 })//, MEGame.ME1, MEGame.ME2, MEGame.ME3})
                 {
                     var filePaths = MELoadedFiles.GetOfficialFiles(game);
                     foreach (string filePath in filePaths)
@@ -401,7 +418,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
                         raw.SkipInt32(); //skip magic as we have already read it
                         var versionLicenseePacked = raw.ReadUInt32();
-                        
+
                         raw.ReadInt32();
                         int foldernameStrLen = raw.ReadInt32();
                         if (foldernameStrLen > 0)
@@ -410,7 +427,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                             fs.ReadStringUnicodeNull(foldernameStrLen * -2);
 
                         var Flags = (UnrealFlags.EPackageFlags)raw.ReadUInt32();
-                        
+
                         if ((game == MEGame.ME3 || game == MEGame.LE3)
                          && Flags.HasFlag(UnrealFlags.EPackageFlags.Cooked))
                         {
@@ -449,7 +466,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         }
                         //should never be more than 1 generation, but just in case
                         raw.Skip(generationsTableCount * 12);
-                        
+
                         raw.SkipInt32(); //engineVersion          Like unrealVersion and licenseeVersion, these 2 are determined by what game this is,
                         raw.SkipInt32(); //cookedContentVersion   so we don't have to read them in
 
@@ -481,7 +498,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
                         var NumChunks = raw.ReadInt32();
                         int compressedSize = 0;
-                        int uncompressedSize = 0; 
+                        int uncompressedSize = 0;
                         for (int i = 0; i < NumChunks; i++)
                         {
                             raw.ReadInt32();
@@ -509,7 +526,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 var oodleWS = xl.AddWorksheet("Oodle");
                 var lzoWS = xl.AddWorksheet("lzo");
                 var zlibWS = xl.AddWorksheet("zlib");
-                foreach ((List<CompressionData> data, IXLWorksheet ws) in new []{oodleData, lzoData, zLibData}.Zip(new []{oodleWS, lzoWS, zlibWS}))
+                foreach ((List<CompressionData> data, IXLWorksheet ws) in new[] { oodleData, lzoData, zLibData }.Zip(new[] { oodleWS, lzoWS, zlibWS }))
                 {
                     ws.Cell(1, 1).SetValue("Compressed Size");
                     ws.Cell(1, 2).SetValue("Uncompressed Size");
@@ -653,7 +670,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             }).ContinueWithOnUIThread(prevTask =>
             {
                 pewpf.IsBusy = false;
-                new ListDialog(new []
+                new ListDialog(new[]
                 {
                     $"build:\n {string.Join('\n', prevTask.Result.buildData.Select(kvp => $"{kvp.Key}: {string.Join(',', kvp.Value)}"))}",
                     $"branc:\n {string.Join('\n', prevTask.Result.branchData.Select(kvp => $"{kvp.Key}: {string.Join(',', kvp.Value)}"))}",
@@ -670,6 +687,13 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         }
         public static void ScanStuff(PackageEditorWindow pewpf)
         {
+            ////test pcc deserialization time
+            //string pccPath = MELoadedFiles.GetFilesLoadedInGame(MEGame.LE3)["SFXGame.pcc"];
+            //for (int i = 0; i < 200; i++)
+            //{
+            //    MEPackageHandler.OpenMEPackage(pccPath, forceLoadFromDisk: true);
+            //}
+            //return;
             //var game = MEGame.LE3;
             //var filePaths = MELoadedFiles.GetOfficialFiles(game);//.Concat(MELoadedFiles.GetOfficialFiles(MEGame.ME2));//.Concat(MELoadedFiles.GetOfficialFiles(MEGame.ME1));
             //var filePaths = MELoadedFiles.GetAllFiles(game);
@@ -704,7 +728,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         baseFiles.Add(MEPackageHandler.OpenMEPackage(Path.Combine(ME3Directory.CookedPCPath, "BIOP_MP_COMMON.pcc")));
                     }
 
-                    foreach (string filePath in EnumerateOfficialFiles(game))
+                    foreach (string filePath in baseFiles.Select(x => x.FilePath))// EnumerateOfficialFiles(game))
                     {
                         //ScanShaderCache(filePath);
                         //ScanMaterials(filePath);
@@ -717,7 +741,9 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         //RecompileAllFunctions(filePath);
                         //RecompileAllStates(filePath);
                         //RecompileAllDefaults(filePath, packageCache);
-                        RecompileAllStructs(filePath, packageCache);
+                        //RecompileAllStructs(filePath, packageCache);
+                        //RecompileAllEnums(filePath, packageCache);
+                        RecompileAllClasses(filePath, packageCache);
                     }
                     if (interestingExports.Any())
                     {
@@ -729,8 +755,11 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 //the base files will have been in memory for so long at this point that they take a looong time to clear out automatically, so force it.
                 MemoryAnalyzer.ForceFullGC();
                 pewpf.IsBusy = false;
-                interestingExports.Add(new EntryStringPair(null, string.Join("\n", extraInfo)));
-                var listDlg = new ListDialog(interestingExports, "Interesting Exports", "", pewpf)
+                if (extraInfo.Count > 0)
+                {
+                    interestingExports.Add(new EntryStringPair(string.Join("\n", extraInfo)));
+                }
+                var listDlg = new ListDialog(interestingExports, $" {interestingExports.Count} Interesting Exports", "", pewpf)
                 {
                     DoubleClickEntryHandler = entryItem =>
                     {
@@ -740,6 +769,9 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                             p.Show();
                             p.LoadFile(entryToSelect.FileRef.FilePath, entryToSelect.UIndex);
                             p.Activate();
+                            p = new PackageEditorWindow();
+                            p.Show();
+                            p.LoadFile(entryToSelect.FileRef.FilePath, entryToSelect.UIndex);
                             if (comparisonDict.TryGetValue($"{entryToSelect.UIndex} {entryToSelect.FileRef.FilePath}", out (byte[] original, byte[] newData) val))
                             {
                                 File.WriteAllBytes(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "original.bin"), val.original);
@@ -996,7 +1028,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                             var originalData = exp.Data;
                             (_, string originalScript) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
                             (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileFunction(exp, originalScript, fileLib);
-                            if (log.AllErrors.Count > 0)
+                            if (log.HasErrors)
                             {
                                 interestingExports.Add(exp);
                                 continue;
@@ -1045,7 +1077,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                             //var originalData = exp.Data;
                             (_, string originalScript) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
                             (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileFunction(exp, originalScript, fileLib);
-                            if (ast == null || log.AllErrors.Count > 0)
+                            if (ast == null || log.HasErrors)
                             {
                                 interestingExports.Add(exp);
                             }
@@ -1085,7 +1117,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                             var originalData = exp.Data;
                             (_, string originalScript) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
                             (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileState(exp, originalScript, fileLib);
-                            if (ast == null || log.AllErrors.Count > 0)
+                            if (ast == null || log.HasErrors)
                             {
                                 interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\nCompilation failed!"));
                             }
@@ -1131,7 +1163,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         {
                             (_, string script) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
                             (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileDefaultProperties(exp, script, fileLib, packageCache);
-                            if (ast is not DefaultPropertiesBlock || log.AllErrors.Any())
+                            if (ast is not DefaultPropertiesBlock || log.HasErrors)
                             {
                                 interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {pcc.FilePath}\nfailed to parse defaults!"));
                                 return;
@@ -1175,13 +1207,17 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         }
 
                         foundClasses.Add(instancedFullPath);
+                        if (exp.GetBinaryData<UScriptStruct>().StructFlags.Has(ScriptStructFlags.Native))
+                        {
+                            continue;
+                        }
                         try
                         {
                             if (fileLib.Initialize())
                             {
                                 (_, string script) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
                                 (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileStruct(exp, script, fileLib, packageCache);
-                                if (ast is not Struct || log.AllErrors.Any())
+                                if (ast is not Struct || log.HasErrors)
                                 {
                                     interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {pcc.FilePath}\nfailed to parse defaults!"));
                                     return;
@@ -1190,6 +1226,115 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                                 if (exp.EntryHasPendingChanges || exp.GetAllDescendants().Any(entry => entry.EntryHasPendingChanges))
                                 {
                                     interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\nRecompilation does not match!"));
+                                }
+                            }
+                            else
+                            {
+                                interestingExports.Add(new EntryStringPair($"{pcc.FilePath} failed to compile!"));
+                                return;
+                            }
+                        }
+                        catch (Exception exception)
+                        {
+                            Console.WriteLine(exception);
+                            interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\n{exception}"));
+                            return;
+                        }
+                    }
+                }
+            }
+
+            void RecompileAllEnums(string filePath, PackageCache packageCache = null)
+            {
+                using IMEPackage pcc = MEPackageHandler.OpenMEPackage(filePath);
+                var fileLib = new FileLib(pcc);
+
+                for (int i = 0; i < pcc.ExportCount; i++)
+                {
+                    ExportEntry exp = pcc.Exports[i];
+                    if (exp.ClassName is "Enum")
+                    {
+                        string instancedFullPath = exp.InstancedFullPath;
+                        if (foundClasses.Contains(instancedFullPath))
+                        {
+                            continue;
+                        }
+
+                        foundClasses.Add(instancedFullPath);
+                        try
+                        {
+                            if (fileLib.Initialize())
+                            {
+                                (_, string script) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
+                                (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileEnum(exp, script, fileLib, packageCache);
+                                if (ast is not Enumeration || log.HasErrors)
+                                {
+                                    interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {pcc.FilePath}\nfailed to parse defaults!"));
+                                    return;
+                                }
+
+                                if (exp.EntryHasPendingChanges)
+                                {
+                                    interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\nRecompilation does not match!"));
+                                }
+                            }
+                            else
+                            {
+                                interestingExports.Add(new EntryStringPair($"{pcc.FilePath} failed to compile!"));
+                                return;
+                            }
+                        }
+                        catch (Exception exception)
+                        {
+                            Console.WriteLine(exception);
+                            interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\n{exception}"));
+                            return;
+                        }
+                    }
+                }
+            }
+
+            void RecompileAllClasses(string filePath, PackageCache packageCache = null)
+            {
+                using IMEPackage pcc = MEPackageHandler.OpenMEPackage(filePath);
+                var fileLib = new FileLib(pcc);
+
+                for (int i = 0; i < pcc.ExportCount; i++)
+                {
+                    ExportEntry exp = pcc.Exports[i];
+                    if (exp.IsClass)
+                    {
+                        string instancedFullPath = exp.InstancedFullPath;
+                        if (foundClasses.Contains(instancedFullPath))
+                        {
+                            continue;
+                        }
+
+                        try
+                        {
+                            if (fileLib.Initialize())
+                            {
+                                (ASTNode decompiledClassNode, string script) = UnrealScriptCompiler.DecompileExport(exp, fileLib);
+                                if (!((Class)decompiledClassNode).IsFullyDefined)
+                                {
+                                    continue;
+                                }
+                                foundClasses.Add(instancedFullPath);
+                                (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileClass(pcc, exp, script, fileLib, packageCache);
+                                if (ast is not Class || log.HasErrors)
+                                {
+                                    interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {pcc.FilePath}\nfailed to parse class!"));
+                                    return;
+                                }
+
+                                if (exp.EntryHasPendingChanges )//|| exp.GetAllDescendants().Any(entry => entry.EntryHasPendingChanges))
+                                {
+                                    interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\nRecompilation does not match!"));
+                                }
+                                if (pcc.FindEntry(UnrealPackageFile.TrashPackageName) is not null)
+                                {
+                                    interestingExports.Add(new EntryStringPair(exp, $"{exp.UIndex}: {filePath}\nTrashed an export! Aborting compilation for file."));
+                                    return;
                                 }
                             }
                             else
@@ -1252,9 +1397,9 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             #endregion
         }
 
-        public static void CreateDynamicLighting(IMEPackage Pcc)
+        public static void CreateDynamicLighting(IMEPackage Pcc, bool silent = false)
         {
-            foreach (ExportEntry exp in Pcc.Exports.Where(exp => exp.IsA("MeshComponent") || exp.IsA("BrushComponent")))
+            foreach (ExportEntry exp in Pcc.Exports.Where(exp => (exp.IsA("MeshComponent") && exp.Parent.IsA("StaticMeshActorBase")) || (exp.IsA("BrushComponent") && !exp.Parent.IsA("Volume"))))
             {
                 PropertyCollection props = exp.GetProperties();
                 if (props.GetProp<ObjectProperty>("StaticMesh")?.Value != 11483 &&
@@ -1267,11 +1412,11 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
                 props.AddOrReplaceProp(new BoolProperty(false, "bUsePreComputedShadows"));
                 props.AddOrReplaceProp(new BoolProperty(false, "bBioForcePreComputedShadows"));
-                //props.AddOrReplaceProp(new BoolProperty(true, "bCastDynamicShadow"));
+                props.AddOrReplaceProp(new BoolProperty(false, "bCastDynamicShadow"));
                 //props.AddOrReplaceProp(new BoolProperty(true, "CastShadow"));
                 //props.AddOrReplaceProp(new BoolProperty(true, "bAcceptsDynamicDominantLightShadows"));
                 props.AddOrReplaceProp(new BoolProperty(true, "bAcceptsLights"));
-                //props.AddOrReplaceProp(new BoolProperty(true, "bAcceptsDynamicLights"));
+                //props.AddOrReplaceProp(new BoolProperty(false, "bAcceptsDynamicLights"));
 
                 var lightingChannels = props.GetProp<StructProperty>("LightingChannels") ??
                                        new StructProperty("LightingChannelContainer", false,
@@ -1282,6 +1427,32 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 lightingChannels.Properties.AddOrReplaceProp(new BoolProperty(true, "Static"));
                 lightingChannels.Properties.AddOrReplaceProp(new BoolProperty(true, "Dynamic"));
                 lightingChannels.Properties.AddOrReplaceProp(new BoolProperty(true, "CompositeDynamic"));
+                props.AddOrReplaceProp(lightingChannels);
+
+                exp.WriteProperties(props);
+            }
+            //fix interpactors to be dynamic
+            foreach (ExportEntry exp in Pcc.Exports.Where(exp => exp.IsA("MeshComponent") && exp.Parent.IsA("DynamicSMActor")))
+            {
+                PropertyCollection props = exp.GetProperties();
+                if (props.GetProp<ObjectProperty>("StaticMesh")?.Value != 11483 &&
+                    (props.GetProp<BoolProperty>("bAcceptsLights")?.Value == false ||
+                     props.GetProp<BoolProperty>("CastShadow")?.Value == false))
+                {
+                    // shadows/lighting has been explicitly forbidden, don't mess with it.
+                    continue;
+                }
+
+                props.AddOrReplaceProp(new BoolProperty(false, "bUsePreComputedShadows"));
+                props.AddOrReplaceProp(new BoolProperty(false, "bBioForcePreComputedShadows"));
+
+                var lightingChannels = props.GetProp<StructProperty>("LightingChannels") ??
+                                       new StructProperty("LightingChannelContainer", false,
+                                           new BoolProperty(true, "bIsInitialized"))
+                                       {
+                                           Name = "LightingChannels"
+                                       };
+                lightingChannels.Properties.AddOrReplaceProp(new BoolProperty(true, "Dynamic"));
                 props.AddOrReplaceProp(lightingChannels);
 
                 exp.WriteProperties(props);
@@ -1307,7 +1478,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 exp.WriteProperties(props);
             }
 
-            MessageBox.Show("Done!");
+            if (!silent)
+                MessageBox.Show("Done!");
         }
 
         public static void ConvertAllDialogueToSkippable(PackageEditorWindow pewpf)
@@ -2024,7 +2196,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         {
                             (_, string script) = UnrealScriptCompiler.DecompileExport(export, fileLib);
                             (ASTNode ast, MessageLog log) = UnrealScriptCompiler.CompileStruct(export, script, fileLib);
-                            if (ast is not Struct s || log.AllErrors.Any())
+                            if (ast is not Struct s || log.HasErrors)
                             {
                                 throw new Exception();
                             }
@@ -2042,7 +2214,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 //    {
                 //        (_, string script) = UnrealScriptCompiler.DecompileExport(export, fileLib);
                 //        (ASTNode ast, MessageLog log, _) = UnrealScriptCompiler.CompileAST(script, export.ClassName, export.Game);
-                //        if (ast is not Class c|| log.AllErrors.Any())
+                //        if (ast is not Class c|| log.HasErrors)
                 //        {
                 //            throw new Exception();
                 //        }
@@ -2050,7 +2222,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 //        //foreach (State state in c.States)
                 //        //{
                 //        //    ast = UnrealScriptCompiler.CompileNewStateBodyAST(export, state, log, fileLib);
-                //        //    if (ast is not State || log.AllErrors.Any())
+                //        //    if (ast is not State || log.HasErrors)
                 //        //    {
                 //        //        throw new Exception();
                 //        //    }
@@ -2059,14 +2231,14 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 //        //foreach (Function function in c.Functions)
                 //        //{
                 //        //    ast = UnrealScriptCompiler.CompileNewFunctionBodyAST(export, function, log, fileLib);
-                //        //    if (ast is not Function || log.AllErrors.Any())
+                //        //    if (ast is not Function || log.HasErrors)
                 //        //    {
                 //        //        throw new Exception();
                 //        //    }
                 //        //}
 
                 //        ast = UnrealScriptCompiler.CompileDefaultPropertiesAST(export, c.DefaultProperties, log, fileLib);
-                //        if (ast is not DefaultPropertiesBlock || log.AllErrors.Any())
+                //        if (ast is not DefaultPropertiesBlock || log.HasErrors)
                 //        {
                 //            throw new Exception();
                 //        }

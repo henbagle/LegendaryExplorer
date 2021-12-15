@@ -14,13 +14,13 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
         public UnrealFlags.EClassFlags ClassFlags;
         public UIndex OuterClass;
         public NameReference ClassConfigName;
-        public NameReference[] unkNameList1; //ME1, ME2
+        public NameReference[] unkNameList1; //ME1, ME2. Categories?
         public OrderedMultiValueDictionary<NameReference, UIndex> ComponentNameToDefaultObjectMap;
         public OrderedMultiValueDictionary<UIndex, UIndex> Interfaces;
-        public NameReference unkName2;//ME3, LE
-        public uint unk2; //ME3, LE
+        public NameReference DLLBindName;//ME3, LE. Always None?
+        public uint unk2; //ME3, LE. ForceScriptOrder?
         public uint le2ps3me2Unknown; //ME2, PS3 only and LE2
-        public NameReference[] unkNameList2;//ME1/ME2
+        public NameReference[] unkNameList2;//ME1/ME2. Categories?
         public UIndex Defaults;
         public UIndex[] VirtualFunctionTable;//ME3
 
@@ -43,12 +43,23 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             sc.Serialize(ref Interfaces, SCExt.Serialize, SCExt.Serialize);
             if (sc.Game >= MEGame.ME3 || sc.Pcc.Platform == MEPackage.GamePlatform.PS3)
             {
-                sc.Serialize(ref unkName2);
+                sc.Serialize(ref DLLBindName);
                 sc.Serialize(ref unk2);
             }
             else
             {
                 sc.Serialize(ref unkNameList2, SCExt.Serialize);
+                if (sc.IsLoading)
+                {
+                    // This doesn't compile after merge from Beta -> CrossGen-vtest
+                    // 11/22/2021. Unsure if it matters here. Was it DLLBindName to ensure 
+                    // it was properly populated?
+                    // unkName2 = "None";
+
+                    // 11/22/2021 - Load "None" to make sure when porting cross games this is populated
+                    DLLBindName = "None";
+                    unk2 = 0;
+                }
             }
 
             if (sc.Game is MEGame.LE2 || sc.Game == MEGame.ME2 && sc.Pcc.Platform == MEPackage.GamePlatform.PS3) //ME2 PS3 has extra integer here for some reason
@@ -77,7 +88,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
                 unkNameList1 = Array.Empty<NameReference>(),
                 ComponentNameToDefaultObjectMap = new OrderedMultiValueDictionary<NameReference, UIndex>(),
                 Interfaces = new OrderedMultiValueDictionary<UIndex, UIndex>(),
-                unkName2 = "None",
+                DLLBindName = "None",
                 unkNameList2 = Array.Empty<NameReference>(),
                 Defaults = 0,
                 VirtualFunctionTable = Array.Empty<UIndex>()
@@ -113,7 +124,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             names.AddRange(ComponentNameToDefaultObjectMap.Select((kvp, i) => (kvp.Key, $"ComponentNameToDefaultObjectMap[{i}]")));
             if (game >= MEGame.ME3)
             {
-                names.Add((unkName2, nameof(unkName2)));
+                names.Add((DLLBindName, nameof(DLLBindName)));
             }
             else
             {

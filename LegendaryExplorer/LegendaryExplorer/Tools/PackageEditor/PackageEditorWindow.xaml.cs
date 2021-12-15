@@ -65,7 +65,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
         {
             "GFxMovieInfo", "BioSWF", "Texture2D", "WwiseStream", "BioTlkFile",
             "World", "Package", "StaticMesh", "SkeletalMesh", "Sequence", "Material", "Function", "Class", "State",
-            "TextureCube"
+            "TextureCube", "Bio2DA", "Bio2DANumberedRows"
         };
 
         /// <summary>
@@ -113,15 +113,23 @@ namespace LegendaryExplorer.Tools.PackageEditor
         public ObservableCollectionExtended<TreeViewEntry> AllTreeViewNodesX { get; } = new();
 
         private TreeViewEntry _selectedItem;
-
         public TreeViewEntry SelectedItem
         {
             get => _selectedItem;
             set
             {
                 var oldIndex = _selectedItem?.UIndex;
-                if (SetProperty(ref _selectedItem, value) && !SuppressSelectionEvent)
+                // Some weird oddity exists in TreeView WPF where it selects the node twice when expanding stuff
+                // and it makes first selection sometimes reset to nothing.
+                // This is hack to make it not do that.
+
+                // only allow selecting a null tree entry if there is no package loaded
+                bool allowSelection = Pcc != null && value != null;
+                if (!allowSelection && Pcc == null) allowSelection = true;
+
+                if (allowSelection && SetProperty(ref _selectedItem, value) && !SuppressSelectionEvent)
                 {
+                    //_lastSelectionEvent = now;
                     if (oldIndex.HasValue && oldIndex.Value != 0 && !IsBackForwardsNavigationEvent)
                     {
                         // 0 = tree root
@@ -169,6 +177,8 @@ namespace LegendaryExplorer.Tools.PackageEditor
         }
 
         #region Commands
+        public ICommand NavigateBackCommand { get; set; }
+        public ICommand NavigateForwardCommand { get; set; }
         public ICommand ForceReloadPackageCommand { get; set; }
         public ICommand ComparePackagesCommand { get; set; }
         public ICommand OpenLEVersionCommand { get; set; }
@@ -290,7 +300,10 @@ namespace LegendaryExplorer.Tools.PackageEditor
             OpenLEVersionCommand = new GenericCommand(() => OpenOtherVersion(true), IsLoadedPackageOT);
             OpenOTVersionCommand = new GenericCommand(() => OpenOtherVersion(false), IsLoadedPackageLE);
 
-            ForceReloadPackageCommand = new GenericCommand(()=> ExperimentsMenu.ForceReloadPackageWithoutSharing(), ()=> ShowExperiments && ExperimentsMenu.CanForceReload());
+            ForceReloadPackageCommand = new GenericCommand(() => ExperimentsMenu.ForceReloadPackageWithoutSharing(), () => ShowExperiments && ExperimentsMenu.CanForceReload());
+
+            NavigateForwardCommand = new GenericCommand(NavigateToNextEntry, () => CurrentView == CurrentViewMode.Tree && ForwardsIndexes != null && ForwardsIndexes.Any());
+            NavigateBackCommand = new GenericCommand(NavigateToPreviousEntry, () => CurrentView == CurrentViewMode.Tree && BackwardsIndexes != null && BackwardsIndexes.Any());
         }
 
         private void CalculateExportMD5()
@@ -317,6 +330,11 @@ namespace LegendaryExplorer.Tools.PackageEditor
 
 
             var otherVerNameBase = Path.GetFileNameWithoutExtension(Pcc.FilePath);
+            if (Pcc.Game == MEGame.ME1 && openLegendaryVersion && otherVerNameBase == "BIOC_Base")
+                otherVerNameBase = "SFXGame";
+            if (Pcc.Game == MEGame.LE1 && !openLegendaryVersion && otherVerNameBase == "SFXGame")
+                otherVerNameBase = "BIOC_Base";
+
             var otherVerName = $"{otherVerNameBase}.{(Pcc.Game == MEGame.LE1 ? "SFM" : "pcc")}";
             if (files.TryGetValue(otherVerName, out var matchingVersion))
             {
@@ -326,8 +344,8 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 pe.Show();
                 return;
             }
-            
-            
+
+
             if (Pcc.Game == MEGame.LE1)
             {
                 // try other extensions
@@ -360,6 +378,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
             {
                 Task.Run(() =>
                 {
+                    var unresolvableImports = new List<EntryStringPair>();
                     BusyText = "Resolving imports";
                     IsBusy = true;
 
@@ -368,19 +387,36 @@ namespace LegendaryExplorer.Tools.PackageEditor
                     var cache = new PackageCache();
                     foreach (var impTV in treeNodes)
                     {
-                        var resolvedExp = EntryImporter.ResolveImport(impTV.Entry as ImportEntry, null, cache, clipRootLevelPackage: false);
-                        if (resolvedExp?.FileRef.FilePath != null)
+                        if (impTV.Entry.IsAKnownNativeClass())
                         {
-                            var fname = Path.GetFileName(resolvedExp.FileRef.FilePath);
-                            impTV.SubText = fname;
+                            impTV.SubText = $"{impTV.Entry.InstancedFullPath.Substring(0, impTV.Entry.InstancedFullPath.IndexOf('.'))}.{(impTV.Game == MEGame.ME1 ? "u" : "pcc")} (Native)";
                         }
+                        else
+                        {
+                            var resolvedExp = EntryImporter.ResolveImport(impTV.Entry as ImportEntry, null, cache, clipRootLevelPackage: false);
+                            if (resolvedExp == null)
+                            {
+                                unresolvableImports.Add(new EntryStringPair(impTV.Entry, $"Unresolvable import: {impTV.Entry.InstancedFullPath}"));
+                            }
+                            else if (resolvedExp.FileRef.FilePath != null)
+                            {
+                                var fname = Path.GetFileName(resolvedExp.FileRef.FilePath);
+                                impTV.SubText = fname;
+                            }
+                        }
+
                     }
 
 
-                    return null;
-                }).ContinueWithOnUIThread(foundCandidates =>
+                    return unresolvableImports;
+                }).ContinueWithOnUIThread(unresolvableImports =>
                 {
                     IsBusy = false;
+                    if (unresolvableImports.Exception == null)
+                    {
+                        ListDialog ld = new ListDialog(unresolvableImports.Result, "Found unresolved imports", "The following imports failed to resolve. This may be due to improperly named files (an issue in LEX, not in the game), or they may be incorrectly named.", this) { DoubleClickEntryHandler = GetEntryDoubleClickAction() };
+                        ld.Show();
+                    }
                 });
             }
         }
@@ -864,7 +900,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
         }
 
 
-        private async void SaveFileAs()
+        internal async void SaveFileAs()
         {
             string fileFilter;
             switch (Pcc.Game)
@@ -946,53 +982,29 @@ namespace LegendaryExplorer.Tools.PackageEditor
         private void NewLevelFile()
         {
             string gameString = InputComboBoxDialog.GetValue(this, "Choose game to create a level file for:",
-                                                          "Create new level file", new[] { "LE3", "LE1", "ME3", "ME2" }, "ME3");
-            if (Enum.TryParse(gameString, out MEGame game) && game is MEGame.ME3 or MEGame.ME2 or MEGame.LE3 or MEGame.LE1)
+                                                          "Create new level file", new[] { "LE3", "LE2", "LE1", "ME3", "ME2", "ME1" }, "LE3");
+            if (Enum.TryParse(gameString, out MEGame game) && (game.IsLEGame() || game.IsOTGame()))
             {
                 var dlg = new SaveFileDialog
                 {
-                    
                     Filter = GameFileFilters.ME3ME2SaveFileFilter,
                     OverwritePrompt = true
                 };
                 if (game.IsLEGame())
                     dlg.Filter = GameFileFilters.LESaveFileFilter;
+                if (game == MEGame.ME1)
+                    dlg.Filter = GameFileFilters.ME1SaveFileFilter;
+
                 if (dlg.ShowDialog() == true)
                 {
                     if (File.Exists(dlg.FileName))
                     {
                         File.Delete(dlg.FileName);
                     }
-                    string emptyLevelName = game switch
-                    {
-                        MEGame.LE1 => "LE1EmptyLevel",
-                        MEGame.LE3 => "LE3EmptyLevel",
-                        MEGame.ME2 => "ME2EmptyLevel",
-                        _ => "ME3EmptyLevel"
-                    };
-                    File.Copy(Path.Combine(AppDirectories.ExecFolder, $"{emptyLevelName}.pcc"), dlg.FileName);
-                    LoadFile(dlg.FileName);
-                    for (int i = 0; i < Pcc.Names.Count; i++)
-                    {
-                        string name = Pcc.Names[i];
-                        if (name.Equals(emptyLevelName))
-                        {
-                            var newName = name.Replace(emptyLevelName, Path.GetFileNameWithoutExtension(dlg.FileName));
-                            Pcc.replaceName(i, newName);
-                        }
-                    }
 
-                    var packguid = Guid.NewGuid();
-                    var package = Pcc.GetUExport(game switch
-                    {
-                        MEGame.LE1 => 4,
-                        MEGame.LE3 => 6,
-                        MEGame.ME2 => 7,
-                        _ => 1
-                    });
-                    package.PackageGUID = packguid;
-                    Pcc.PackageGuid = packguid;
-                    SaveFile();
+                    MEPackageHandler.CreateEmptyLevel(dlg.FileName, game);
+
+                    LoadFile(dlg.FileName);
                 }
             }
         }
@@ -1265,7 +1277,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                     }
                 }
             }
-            catch (Exception e)
+            catch
             {
 
             }
@@ -1464,111 +1476,117 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 {
                     case "BioSWF":
                     case "GFxMovieInfo":
-                    {
-                        try
                         {
-                            var props = exp.GetProperties();
-                            string dataPropName = exp.FileRef.Game != MEGame.ME1 ? "RawData" : "Data";
-                            var DataProp = props.GetProp<ImmutableByteArrayProperty>(dataPropName);
-                            byte[] data = DataProp.bytes;
-
-                            if (savePath == null)
+                            try
                             {
-                                //GFX is scaleform extensions for SWF
-                                //SWC is Shockwave Compressed
-                                //SWF is Shockwave Flash (uncompressed)
-                                var d = new SaveFileDialog
+                                var props = exp.GetProperties();
+                                string dataPropName = exp.FileRef.Game != MEGame.ME1 ? "RawData" : "Data";
+                                var DataProp = props.GetProp<ImmutableByteArrayProperty>(dataPropName);
+                                byte[] data = DataProp.bytes;
+
+                                if (savePath == null)
                                 {
-                                    Title = "Save SWF",
-                                    FileName = exp.FullPath + ".swf",
-                                    Filter = "*.swf|*.swf"
-                                };
-                                if (d.ShowDialog() == true)
+                                    //GFX is scaleform extensions for SWF
+                                    //SWC is Shockwave Compressed
+                                    //SWF is Shockwave Flash (uncompressed)
+                                    var d = new SaveFileDialog
+                                    {
+                                        Title = "Save SWF",
+                                        FileName = exp.FullPath + ".swf",
+                                        Filter = "*.swf|*.swf"
+                                    };
+                                    if (d.ShowDialog() == true)
+                                    {
+                                        File.WriteAllBytes(d.FileName, data);
+                                        MessageBox.Show("Done");
+                                    }
+                                }
+                                else
                                 {
-                                    File.WriteAllBytes(d.FileName, data);
-                                    MessageBox.Show("Done");
+                                    File.WriteAllBytes(savePath, data);
                                 }
                             }
-                            else
+                            catch (Exception ex)
                             {
-                                File.WriteAllBytes(savePath, data);
+                                MessageBox.Show("Error reading/saving SWF data:\n\n" + ex.FlattenException());
                             }
+                            break;
                         }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show("Error reading/saving SWF data:\n\n" + ex.FlattenException());
-                        }
-                        break;
-                    }
                     case "BioTlkFile":
-                    {
-                        string extension = Path.GetExtension(".xml");
-                        var d = new SaveFileDialog
                         {
-                            Title = "Export TLK as XML",
-                            FileName = exp.FullPath + ".xml",
-                            Filter = $"*{extension}|*{extension}"
-                        };
-                        if (d.ShowDialog() == true)
-                        {
-                            var exportingTalk = new ME1TalkFile(exp);
-                            exportingTalk.saveToFile(d.FileName);
-                            MessageBox.Show("Done");
-                        }
-                        break;
-                    }
-                    case "BioSoundNodeWaveStreamingData":
-                    {
-                        var d = new CommonOpenFileDialog()
-                        {
-                            Title = "Select output folder for ICBs",
-                            IsFolderPicker = true
-                        };
-                        if (d.ShowDialog() == CommonFileDialogResult.Ok)
-                        {
-                            var outDir = d.FileName;
-                            // todo: Use objectbinary when we implement it
-                            var data = new MemoryStream(exp.GetBinaryData());
-                            var totalStreamingDataLen = data.ReadInt32();
-                            var isbOffset = data.ReadInt32();
-
-                            while (data.Position < data.Length)
+                            string extension = Path.GetExtension(".xml");
+                            var d = new SaveFileDialog
                             {
+                                Title = "Export TLK as XML",
+                                FileName = exp.FullPath + ".xml",
+                                Filter = $"*{extension}|*{extension}"
+                            };
+                            if (d.ShowDialog() == true)
+                            {
+                                var exportingTalk = new ME1TalkFile(exp);
+                                exportingTalk.SaveToXML(d.FileName);
+                                MessageBox.Show("Done");
+                            }
+                            break;
+                        }
+                    case "BioSoundNodeWaveStreamingData":
+                        {
+                            var d = new CommonOpenFileDialog()
+                            {
+                                Title = "Select output folder for ICBs",
+                                IsFolderPicker = true
+                            };
+                            if (d.ShowDialog() == CommonFileDialogResult.Ok)
+                            {
+                                // ICB
+                                var outDir = d.FileName;
+                                // todo: Use objectbinary when we implement it
+                                var data = new MemoryStream(exp.GetBinaryData());
+                                var totalStreamingDataLen = data.ReadInt32();
+                                var isbOffset = data.ReadInt32();
+
+                                string icbName = null;
+
+                                // ICB
                                 var dataStartPos = data.Position; // RIFF start
                                 data.Skip(0x4); // get riff length
                                 var riffLen = data.ReadInt32() + 0x8; // include len and RIFF
                                 data.Skip(0x8); // Jump to start of unicode string
                                 var strLen = data.ReadInt32();
-                                var icbName = data.ReadStringUnicodeNull(strLen);
+                                icbName = data.ReadStringUnicodeNull(strLen);
 
                                 data.Position = dataStartPos;
                                 using FileStream fs = new FileStream(Path.Combine(outDir, icbName), FileMode.Create);
                                 data.CopyToEx(fs, riffLen);
+
+                                // ISB
+                                data.Position = isbOffset;
+                                using FileStream fs2 = new FileStream(Path.Combine(outDir, Path.GetFileNameWithoutExtension(icbName) + ".isb"), FileMode.Create);
+                                data.Copy(fs2, new byte[2048]);
+
+                                MessageBox.Show("Done");
+                            }
+                            break;
+                        }
+                    case "FaceFXAsset":
+                        {
+                            var d = new SaveFileDialog
+                            {
+                                Title = "Save Face FX Asset",
+                                FileName = exp.FullPath + ".fxa",
+                                Filter = "*.fxa|*.fxa"
+                            };
+                            if (d.ShowDialog() == true)
+                            {
+                                var data = new MemoryStream(exp.GetBinaryData());
+                                data.Skip(0x4);
+                                using FileStream fs = new FileStream(d.FileName, FileMode.Create);
+                                data.CopyToEx(fs, (int)data.Length - 4);
+                                MessageBox.Show("Done");
                             }
 
-                            MessageBox.Show("Done");
+                            break;
                         }
-                        break;
-                    }
-                    case "FaceFXAsset":
-                    {
-                        var d = new SaveFileDialog
-                        {
-                            Title = "Save Face FX Asset",
-                            FileName = exp.FullPath + ".fxa",
-                            Filter = "*.fxa|*.fxa"
-                        };
-                        if (d.ShowDialog() == true)
-                        {
-                            var data = new MemoryStream(exp.GetBinaryData());
-                            data.Skip(0x4);
-                            using FileStream fs = new FileStream(d.FileName, FileMode.Create);
-                            data.CopyToEx(fs, (int)data.Length - 4);
-                            MessageBox.Show("Done");
-                        }
-
-                        break;
-                    }
                 }
             }
         }
@@ -1581,127 +1599,134 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 {
                     case "BioSWF":
                     case "GFxMovieInfo":
-                    {
-                        try
                         {
-                            string extension = Path.GetExtension(".swf");
+                            try
+                            {
+                                string extension = Path.GetExtension(".swf");
+                                var d = new OpenFileDialog
+                                {
+                                    Title = "Replace SWF",
+                                    FileName = exp.FullPath + ".swf",
+                                    Filter = $"*{extension};*.gfx|*{extension};*.gfx"
+                                };
+                                if (d.ShowDialog() == true)
+                                {
+                                    var bytes = File.ReadAllBytes(d.FileName);
+                                    var props = exp.GetProperties();
+
+                                    string dataPropName = exp.FileRef.Game != MEGame.ME1 ? "RawData" : "Data";
+                                    var rawData = props.GetProp<ImmutableByteArrayProperty>(dataPropName);
+                                    //Write SWF data
+                                    rawData.bytes = bytes;
+
+                                    //Write SWF metadata
+                                    if (exp.FileRef.Game.IsGame1() || exp.FileRef.Game.IsGame2())
+                                    {
+                                        string sourceFilePropName = "SourceFilePath";
+                                        StrProperty sourceFilePath = props.GetProp<StrProperty>(sourceFilePropName);
+                                        if (sourceFilePath == null)
+                                        {
+                                            sourceFilePath = new StrProperty(d.FileName, sourceFilePropName);
+                                            props.Add(sourceFilePath);
+                                        }
+
+                                        sourceFilePath.Value = d.FileName;
+                                    }
+
+                                    if (exp.FileRef.Game.IsGame1())
+                                    {
+                                        StrProperty sourceFileTimestamp = props.GetProp<StrProperty>("SourceFileTimestamp");
+                                        sourceFileTimestamp = File.GetLastWriteTime(d.FileName)
+                                            .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                                    }
+
+                                    exp.WriteProperties(props);
+                                    MessageBox.Show("Done");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show("Error reading/setting SWF data:\n\n" + ex.FlattenException());
+                            }
+                            break;
+                        }
+                    case "BioTlkFile":
+                        {
+                            string extension = Path.GetExtension(".xml");
                             var d = new OpenFileDialog
                             {
-                                Title = "Replace SWF",
-                                FileName = exp.FullPath + ".swf",
-                                Filter = $"*{extension};*.gfx|*{extension};*.gfx"
+                                Title = "Replace TLK from exported XML (ME1 Only)",
+                                FileName = exp.FullPath + ".xml",
+                                Filter = $"*{extension}|*{extension}"
                             };
                             if (d.ShowDialog() == true)
                             {
-                                var bytes = File.ReadAllBytes(d.FileName);
-                                var props = exp.GetProperties();
-
-                                string dataPropName = exp.FileRef.Game != MEGame.ME1 ? "RawData" : "Data";
-                                var rawData = props.GetProp<ImmutableByteArrayProperty>(dataPropName);
-                                //Write SWF data
-                                rawData.bytes = bytes;
-
-                                //Write SWF metadata
-                                if (exp.FileRef.Game.IsGame1() || exp.FileRef.Game.IsGame2())
-                                {
-                                    string sourceFilePropName = "SourceFilePath";
-                                    StrProperty sourceFilePath = props.GetProp<StrProperty>(sourceFilePropName);
-                                    if (sourceFilePath == null)
-                                    {
-                                        sourceFilePath = new StrProperty(d.FileName, sourceFilePropName);
-                                        props.Add(sourceFilePath);
-                                    }
-
-                                    sourceFilePath.Value = d.FileName;
-                                }
-
-                                if (exp.FileRef.Game.IsGame1())
-                                {
-                                    StrProperty sourceFileTimestamp = props.GetProp<StrProperty>("SourceFileTimestamp");
-                                    sourceFileTimestamp = File.GetLastWriteTime(d.FileName)
-                                        .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-                                }
-
-                                exp.WriteProperties(props);
-                                MessageBox.Show("Done");
+                                HuffmanCompression compressor = new HuffmanCompression();
+                                compressor.LoadInputData(d.FileName);
+                                compressor.SerializeTalkfileToExport(exp, false);
                             }
+                            break;
                         }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show("Error reading/setting SWF data:\n\n" + ex.FlattenException());
-                        }
-                        break;
-                    }
-                    case "BioTlkFile":
-                    {
-                        string extension = Path.GetExtension(".xml");
-                        var d = new OpenFileDialog
-                        {
-                            Title = "Replace TLK from exported XML (ME1 Only)",
-                            FileName = exp.FullPath + ".xml",
-                            Filter = $"*{extension}|*{extension}"
-                        };
-                        if (d.ShowDialog() == true)
-                        {
-                            HuffmanCompression compressor = new HuffmanCompression();
-                            compressor.LoadInputData(d.FileName);
-                            compressor.serializeTalkfileToExport(exp, false);
-                        }
-                        break;
-                    }
                     case "BioSoundNodeWaveStreamingData":
-                    {
-                        // Requires ICB and ISB
-                        string extension = Path.GetExtension(".icb");
-                        var d = new OpenFileDialog
                         {
-                            Title = "Select processed ICB from ISACT",
-                            Filter = $"*{extension}|*{extension}"
-                        };
+                            // Requires ICB and ISB
+                            string extension = Path.GetExtension(".icb");
+                            var d = new OpenFileDialog
+                            {
+                                Title = "Select processed ICB from ISACT",
+                                Filter = $"*{extension}|*{extension}"
+                            };
 
-                        string embeddedICBf = null;
-                        string embeddedISBf = null;
-                        if (d.ShowDialog() == true)
-                        {
-                            var baseName = Path.GetFileNameWithoutExtension(d.FileName);
-                            var basePath = Directory.GetParent(d.FileName).FullName;
+                            var d2 = new OpenFileDialog
+                            {
+                                Title = "Select stripped processed ICB from ISACT",
+                                Filter = $"Stripped ISB|*isb"
+                            };
 
-                            // Strip data from ISB
-                            //MemoryStream
-                            //MemoryStream outStr = new MemoryStream();
-                            //outStr.WriteStringASCII("RIFF");
-                            //outStr.WriteInt32(0); // Placeolder position
+                            string embeddedICBf = null;
+                            string embeddedISBf = null;
+                            if (d.ShowDialog() == true && d2.ShowDialog() == true)
+                            {
+                                var baseName = Path.GetFileNameWithoutExtension(d.FileName);
+                                var basePath = Directory.GetParent(d.FileName).FullName;
 
-                            //while ()
+                                // Strip data from ISB
+                                //MemoryStream
+                                //MemoryStream outStr = new MemoryStream();
+                                //outStr.WriteStringASCII("RIFF");
+                                //outStr.WriteInt32(0); // Placeolder position
 
-                            //// Re-write RIFF size
-                            //outStr.Seek(0x4, SeekOrigin.Begin);
-                            //outStr.WriteInt32((int)outStr.Length);
+                                //while ()
 
-                            var bsnwsd = ObjectBinary.From<BioSoundNodeWaveStreamingData>(exp);
-                            bsnwsd.EmbeddedICB = File.ReadAllBytes(d.FileName);
-                            exp.WriteBinary(bsnwsd);
+                                //// Re-write RIFF size
+                                //outStr.Seek(0x4, SeekOrigin.Begin);
+                                //outStr.WriteInt32((int)outStr.Length);
+
+                                var bsnwsd = ObjectBinary.From<BioSoundNodeWaveStreamingData>(exp);
+                                bsnwsd.EmbeddedICB = File.ReadAllBytes(d.FileName);
+                                bsnwsd.EmbeddedISB = File.ReadAllBytes(d2.FileName);
+                                exp.WriteBinary(bsnwsd);
+                            }
+                            break;
                         }
-                        break;
-                    }
                     case "FaceFXAsset":
-                    {
-                        string extension = Path.GetExtension(".fxa");
-                        var d = new OpenFileDialog
                         {
-                            Title = "Select FaceFX Asset",
-                            Filter = $"*{extension}|*{extension}"
-                        };
-                        if (d.ShowDialog() == true)
-                        {
-                            var length = new FileInfo(d.FileName).Length;
-                            MemoryStream outStream = new MemoryStream();
-                            outStream.WriteInt32((int)length - 4);
-                            outStream.Write(File.ReadAllBytes(d.FileName));
-                            exp.WriteBinary(outStream.GetBuffer());
+                            string extension = Path.GetExtension(".fxa");
+                            var d = new OpenFileDialog
+                            {
+                                Title = "Select FaceFX Asset",
+                                Filter = $"*{extension}|*{extension}"
+                            };
+                            if (d.ShowDialog() == true)
+                            {
+                                var length = new FileInfo(d.FileName).Length;
+                                MemoryStream outStream = new MemoryStream();
+                                outStream.WriteInt32((int)length - 4);
+                                outStream.Write(File.ReadAllBytes(d.FileName));
+                                exp.WriteBinary(outStream.GetBuffer());
+                            }
+                            break;
                         }
-                        break;
-                    }
                 }
             }
         }
@@ -2008,12 +2033,11 @@ namespace LegendaryExplorer.Tools.PackageEditor
                     for (int i = 0; i < Pcc.ImportCount; i++)
                     {
                         ImportEntry imp = Pcc.Imports[i];
-                        if (offsetDec >= imp.HeaderOffset && offsetDec < imp.HeaderOffset + imp.Header.Length)
+                        if (offsetDec >= imp.HeaderOffset && offsetDec < imp.HeaderOffset + ImportEntry.HeaderLength)
                         {
                             GoToNumber(imp.UIndex);
                             Metadata_Tab.IsSelected = true;
-                            MetadataTab_MetadataEditor.SetHexboxSelectedOffset(imp.HeaderOffset + imp.Header.Length -
-                                                                               offsetDec);
+                            MetadataTab_MetadataEditor.SetHexboxSelectedOffset(imp.HeaderOffset + ImportEntry.HeaderLength - offsetDec);
                             return;
                         }
                     }
@@ -2021,12 +2045,11 @@ namespace LegendaryExplorer.Tools.PackageEditor
                     foreach (ExportEntry exp in Pcc.Exports)
                     {
                         //header
-                        if (offsetDec >= exp.HeaderOffset && offsetDec < exp.HeaderOffset + exp.Header.Length)
+                        if (offsetDec >= exp.HeaderOffset && offsetDec < exp.HeaderOffset + exp.HeaderLength)
                         {
                             GoToNumber(exp.UIndex);
                             Metadata_Tab.IsSelected = true;
-                            MetadataTab_MetadataEditor.SetHexboxSelectedOffset(exp.HeaderOffset + exp.Header.Length -
-                                                                               offsetDec);
+                            MetadataTab_MetadataEditor.SetHexboxSelectedOffset(exp.HeaderOffset + exp.HeaderLength - offsetDec);
                             return;
                         }
 
@@ -2442,6 +2465,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
             ExportLoaders[MaterialViewerTab_MaterialExportLoader] = MaterialViewer_Tab;
             ExportLoaders[ScriptTab_UnrealScriptIDE] = Script_Tab;
             ExportLoaders[RADLauncherTab_BIKLauncher] = RADLaunch_Tab;
+            ExportLoaders[AnimNodeTab_AnimNodeLoader] = AnimNode_Tab;
 
 
             InterpreterTab_Interpreter.SetParentNameList(NamesList); //reference to this control for name editor set
@@ -2457,12 +2481,12 @@ namespace LegendaryExplorer.Tools.PackageEditor
 
         public void LoadFile(string s, int goToIndex = 0, string goToEntry = null)
         {
-
-            Debug.WriteLine(Directory.GetCurrentDirectory());
+            // Todo: Maybe prompt if there are pending changes to the current package?
             try
             {
                 preloadPackage(Path.GetFileName(s), new FileInfo(s).Length);
                 LoadMEPackage(s);
+                _selectedItem = null; // We change the backing data so we don't fire off a tree event since it checks if Pcc is null.
                 if (goToIndex == 0 && !string.IsNullOrWhiteSpace(goToEntry))
                 {
                     goToIndex = Pcc.FindEntry(goToEntry)?.UIndex ?? 0;
@@ -2526,7 +2550,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
             ForwardsIndexes = new Stack<int>();
             StatusBar_LeftMostText.Text =
                 $"Loading {loadingName} ({FileSize.FormatSize(loadingSize)})";
-            Dispatcher.Invoke(new Action(() => { }), DispatcherPriority.ContextIdle, null);
+            //Dispatcher.Invoke(new Action(() => { }), DispatcherPriority.ContextIdle, null);
         }
 
         private void InitializeTreeViewBackground_Completed(
@@ -2794,7 +2818,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 }
             }
 
-            if (updates.Any(x => x.Change == PackageChange.ExportRemove || x.Change == PackageChange.ImportRemove))
+            if (updates.Any(x => x.Change is PackageChange.ExportRemove or PackageChange.ImportRemove))
             {
                 InitializeTreeView();
                 InitClassDropDown();
@@ -2829,12 +2853,6 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 InitClassDropDown();
                 MetadataTab_MetadataEditor.RefreshAllEntriesList(Pcc);
                 //Find nodes that haven't been generated and added yet
-
-                //filter to only nodes that don't exist yet (created by external tools)
-                foreach (TreeViewEntry tvi in treeViewItems)
-                {
-                    addedChanges.RemoveAll(x => x.Index == tvi.UIndex);
-                }
 
                 List<IEntry> entriesToAdd = addedChanges.Select(change => Pcc.GetEntry(change.Index)).ToList();
 
@@ -3029,24 +3047,30 @@ namespace LegendaryExplorer.Tools.PackageEditor
             Metadata_Tab.Visibility = Visibility.Visible;
             Intro_Tab.Visibility = Visibility.Collapsed;
             //Debug.WriteLine("New selection: " + n);
-            if (CurrentView == CurrentViewMode.Imports || CurrentView == CurrentViewMode.Exports ||
-                CurrentView == CurrentViewMode.Tree)
+            if (CurrentView is CurrentViewMode.Imports or CurrentViewMode.Exports or CurrentViewMode.Tree)
             {
                 Interpreter_Tab.IsEnabled = selectedEntry is ExportEntry;
                 if (selectedEntry is ExportEntry exportEntry)
                 {
                     foreach ((ExportLoaderControl exportLoader, TabItem tab) in ExportLoaders)
                     {
-                        if (exportLoader.CanParse(exportEntry))
+                        try
                         {
-                            exportLoader.LoadExport(exportEntry);
-                            tab.Visibility = Visibility.Visible;
+                            if (exportLoader.CanParse(exportEntry))
+                            {
+                                exportLoader.LoadExport(exportEntry);
+                                tab.Visibility = Visibility.Visible;
 
+                            }
+                            else
+                            {
+                                tab.Visibility = Visibility.Collapsed;
+                                exportLoader.UnloadExport();
+                            }
                         }
-                        else
+                        catch (Exception e)
                         {
-                            tab.Visibility = Visibility.Collapsed;
-                            exportLoader.UnloadExport();
+                            new ExceptionHandlerDialog(e).ShowDialog();
                         }
                     }
 
@@ -3055,7 +3079,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                         //We are on interpreter tab, selecting class. Switch to binary interpreter as interpreter will never be useful
                         BinaryInterpreter_Tab.IsSelected = true;
                     }
-                    if (Interpreter_Tab.IsSelected && exportEntry.ClassName == "Function" && Bytecode_Tab.IsVisible)
+                    if (Interpreter_Tab.IsSelected && Bytecode_Tab.IsVisible)
                     {
                         Bytecode_Tab.IsSelected = true;
                     }
@@ -3076,7 +3100,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 }
 
                 //CHECK THE CURRENT TAB IS VISIBLE/ENABLED. IF NOT, CHOOSE FIRST TAB THAT IS 
-                TabItem currentTab = (TabItem)EditorTabs.Items[EditorTabs.SelectedIndex];
+                var currentTab = (TabItem)EditorTabs.Items[EditorTabs.SelectedIndex];
                 if (!currentTab.IsEnabled || !currentTab.IsVisible)
                 {
                     int index = 0;
@@ -3275,26 +3299,25 @@ namespace LegendaryExplorer.Tools.PackageEditor
             if (dropInfo.TargetItem is TreeViewEntry targetItem && dropInfo.Data is TreeViewEntry sourceItem &&
                 sourceItem.Parent != null)
             {
-                if (targetItem.Entry != null && sourceItem.Entry != null &&
-                    ////!App.IsDebug &&
-                    sourceItem.Entry.Game != MEGame.UDK && // allow UDK -> OT and LE
-                    targetItem.Game.IsLEGame() != sourceItem.Entry.Game.IsLEGame())
-                {
-                    MessageBox.Show(
-                        "Cannot port assets between Original Trilogy (OT) games and  Legendary Edition (LE) games at this time.", "Cannot port asset", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
+                //if (targetItem.Entry != null && sourceItem.Entry != null &&
+                //    ////!App.IsDebug &&
+                //    sourceItem.Entry.Game != MEGame.UDK && // allow UDK -> OT and LE
+                //    targetItem.Game.IsLEGame() != sourceItem.Entry.Game.IsLEGame())
+                //{
+                //    MessageBox.Show(
+                //        "Cannot port assets between Original Trilogy (OT) games and  Legendary Edition (LE) games at this time.", "Cannot port asset", MessageBoxButton.OK, MessageBoxImage.Error);
+                //    return;
+                //}
 
                 //Check if the path of the target and the source is the same. If so, offer to merge instead
-                if (sourceItem == targetItem ||
-                    (targetItem.Entry != null && sourceItem.Entry.FileRef == targetItem.Entry.FileRef))
+                if (sourceItem == targetItem || (targetItem.Entry != null && sourceItem.Entry.FileRef == targetItem.Entry.FileRef))
                 {
                     return; //ignore
                 }
 
                 var portingOption = TreeMergeDialog.GetMergeType(this, sourceItem, targetItem, Pcc.Game);
 
-                if (portingOption == EntryImporter.PortingOption.Cancel)
+                if (portingOption.PortingOptionChosen == EntryImporter.PortingOption.Cancel)
                 {
                     return;
                 }
@@ -3309,10 +3332,13 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 IEntry targetLinkEntry = targetItem.Entry;
 
 
+
                 int originalIndex = -1;
                 bool hadChanges = false;
                 bool hadHeaderChanges = false;
-                if (portingOption != EntryImporter.PortingOption.ReplaceSingular && targetItem.Entry?.FileRef.FindEntry(sourceItem.Entry.InstancedFullPath) != null)
+                if (portingOption.PortingOptionChosen != EntryImporter.PortingOption.ReplaceSingular
+                    && portingOption.PortingOptionChosen != EntryImporter.PortingOption.ReplaceSingularWithRelink
+                    && targetItem.Entry?.FileRef.FindEntry(sourceItem.Entry.InstancedFullPath) != null)
                 {
                     // It's a duplicate. Offer to index it, as this will break the lookup if it's identical on inbound
                     // (it will just install into an existing entry)
@@ -3333,15 +3359,29 @@ namespace LegendaryExplorer.Tools.PackageEditor
                     sourceEntry.indexValue = targetItem.Entry.FileRef.GetNextIndexedName(sourceEntry.ObjectName).Number;
                 }
 
+                // Load the object DB if games are different
+                ObjectInstanceDB objectDB = portingOption.PortUsingDonors && sourceEntry.Game != targetItem.Game && sourceEntry.Game != MEGame.UDK ? ObjectInstanceDB.DeserializeDB(File.ReadAllText(AppDirectories.GetObjectDatabasePath(targetItem.Game))) : null;
+                objectDB?.BuildLookupTable();
+
                 // To profile this, run dotTrace and attach to the process, make sure to choose option to profile via API
                 //MeasureProfiler.StartCollectingData(); // Start profiling
                 //var sw = new Stopwatch();
                 //sw.Start();
 
+
                 int numExports = Pcc.ExportCount;
                 //Import!
-                var relinkResults = EntryImporter.ImportAndRelinkEntries(portingOption, sourceEntry, Pcc,
-                    targetLinkEntry, true, out IEntry newEntry);
+                RelinkerOptionsPackage rop = new RelinkerOptionsPackage()
+                {
+                    IsCrossGame = sourceEntry.Game != targetItem.Game && sourceEntry.Game != MEGame.UDK,
+                    TargetGameDonorDB = objectDB,
+                    Cache = null, // Disable cache as we want to pull from open files in LEX. Will reduce performance
+                    ImportExportDependencies = portingOption.PortingOptionChosen is EntryImporter.PortingOption.CloneAllDependencies
+                        or EntryImporter.PortingOption.ReplaceSingularWithRelink
+                };
+
+                var relinkResults = EntryImporter.ImportAndRelinkEntries(portingOption.PortingOptionChosen, sourceEntry, Pcc,
+                    targetLinkEntry, true, rop, out IEntry newEntry);
 
                 if (originalIndex >= 0)
                 {
@@ -3360,7 +3400,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 {
                     var ld = new ListDialog(relinkResults, "Relink report",
                         "The following items reported relinking issues.", this)
-                        { DoubleClickEntryHandler = entryDoubleClick };
+                    { DoubleClickEntryHandler = entryDoubleClick };
                     ld.Show();
                 }
                 else
@@ -3981,7 +4021,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
 
 
 
-        public void PropogateRecentsChange(IEnumerable<RecentsControl.RecentItem> newRecents)
+        public void PropogateRecentsChange(string propogationSource, IEnumerable<RecentsControl.RecentItem> newRecents)
         {
             RecentsController.PropogateRecentsChange(false, newRecents);
         }

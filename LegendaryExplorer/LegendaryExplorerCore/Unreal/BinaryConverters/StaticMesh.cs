@@ -119,7 +119,14 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
                 }
                 if (sc.Game >= MEGame.ME3)
                 {
-                    sc.Serialize(ref HighResSourceMeshName);
+                    if (HighResSourceMeshName != null)
+                        sc.Serialize(ref HighResSourceMeshName);
+                    else
+                    {
+                        // When porting ME1, ME2 to ME3 or LE
+                        string blank = "";
+                        sc.Serialize(ref blank);
+                    }
                     sc.Serialize(ref HighResSourceMeshCRC);
                     sc.Serialize(ref LightingGuid);
                 }
@@ -160,7 +167,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
 
         public override List<(UIndex, string)> GetUIndexes(MEGame game)
         {
-            var uIndexes = new List<(UIndex, string)> {(BodySetup, "BodySetup")};
+            var uIndexes = new List<(UIndex, string)> { (BodySetup, "BodySetup") };
 
             for (int i = 0; i < LODModels.Length; i++)
             {
@@ -272,7 +279,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
     public class StaticMeshTriangle
     {
         public Vector3[] Vertices = new Vector3[3];
-        public Vector2[,] UVs = new Vector2[3,8];
+        public Vector2[,] UVs = new Vector2[3, 8];
         public SharpDX.Color[] Colors = new SharpDX.Color[3];
         public int MaterialIndex;
         public int FragmentIndex; //ME3/UDK
@@ -502,7 +509,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             }
             int elementsize = 12;
             sc.Serialize(ref elementsize);
-            sc.Serialize(ref buff.VertexData, Serialize);
+            sc.Serialize(ref buff.VertexData);
         }
         public static void Serialize(this SerializingContainer2 sc, ref FragmentRange fRange)
         {
@@ -642,10 +649,10 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             sc.Serialize(ref data.NumVertices);
             int elementSize = 2;
             sc.Serialize(ref elementSize);
-            sc.Serialize(ref data.IndexBuffer, SCExt.Serialize);
+            sc.Serialize(ref data.IndexBuffer);
             elementSize = 2;
             sc.Serialize(ref elementSize);
-            sc.Serialize(ref data.WireframeIndexBuffer, SCExt.Serialize);
+            sc.Serialize(ref data.WireframeIndexBuffer);
             if (sc.Game != MEGame.UDK)
             {
                 elementSize = 16;

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using LegendaryExplorerCore.Helpers;
-using LegendaryExplorerCore.Unreal.BinaryConverters;
+using LegendaryExplorerCore.Unreal;
 using LegendaryExplorerCore.UnrealScript.Analysis.Symbols;
 using LegendaryExplorerCore.UnrealScript.Compiling.Errors;
 using LegendaryExplorerCore.UnrealScript.Language.Tree;
@@ -91,6 +91,10 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                             {
                                 return Error($"No outer class named '{nodeInterface.Name}' found!", nodeInterface.StartPos, nodeInterface.EndPos);
                             }
+                            if (!node.IsNative && ((Class)nodeInterface).IsNative)
+                            {
+                                return Error($"Only a native class can implement a native interface!", nodeInterface.StartPos, nodeInterface.EndPos);
+                            }
                             node.Interfaces[i] = nodeInterface;
                         }
 
@@ -141,11 +145,16 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                     {
                         if (((Class)node.Parent).SameAsOrSubClassOf(node)) // TODO: not needed due to no forward declarations?
                         {
-                            return Error($"Extending from '{node.Parent.Name}' causes circular extension!", node.Parent.StartPos, node.Parent.EndPos);
+                            return Error($"Extending from '{node.Parent.Name}' causes circular extension!", node.StartPos);
                         }
                         if (!((Class)node.OuterClass).SameAsOrSubClassOf(((Class)node.Parent).OuterClass.Name))
                         {
-                            return Error("Outer class must be a sub-class of the parents outer class!", node.OuterClass.StartPos, node.OuterClass.EndPos);
+                            return Error("Outer class must be a sub-class of the parents outer class!", node.StartPos);
+                        }
+                        if (node.SameAsOrSubClassOf("Interface"))
+                        {
+                            node.Flags |= EClassFlags.Interface;
+                            node.PropertyType = EPropertyType.Interface;
                         }
                         Symbols.GoDirectlyToStack(((Class)node.Parent).GetInheritanceString());
                         string outerScope = null;
@@ -168,6 +177,11 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                     {
                         decl.Outer = node;
                         Success &= decl.AcceptVisitor(this);
+
+                        if (node.Name != "Object" && Symbols.TryGetSymbolInScopeStack<ASTNode>(decl.Name, out _, node.Parent.GetScope()))
+                        {
+                            Log.LogWarning($"A symbol named '{decl.Name}' exists in a parent class. Are you sure you want to shadow it?", decl.StartPos, decl.EndPos);
+                        }
                     }
 
                     if (node.Name != "Object")
@@ -202,10 +216,22 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                 }
                 case ValidationPass.BodyPass:
                 {
-                    if (node.SameAsOrSubClassOf("Interface"))
+                    //from UDN: "Implementing multiple interface classes which have a common base is not supported and will result in incorrect vtable offsets"
+                    if (node.Interfaces.Count > 1)
                     {
-                        node.Flags |= EClassFlags.Interface;
-                        node.PropertyType = EPropertyType.Interface;
+                        var interfaceParents = new HashSet<string>();
+                        foreach (VariableType interfaceClass in node.Interfaces)
+                        {
+                            var parentInterface = (interfaceClass as Class)?.Parent as Class;
+                            while (parentInterface is not null && !parentInterface.Name.CaseInsensitiveEquals("Interface"))
+                            {
+                                if (interfaceParents.Contains(parentInterface.Name))
+                                {
+                                    return Error("Cannot implement two interfaces that have a common base interface lower than the Interface class", node.StartPos);
+                                }
+                                parentInterface = parentInterface.Parent as Class;
+                            }
+                        }
                     }
 
                     //third pass over structs to check for circular inheritance chains
@@ -242,7 +268,14 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                         {
                             node.Flags |= EClassFlags.Config;
                         }
-                        //TODO: instanced object properties?
+                        if (decl.Flags.Has(EPropertyFlags.Localized))
+                        {
+                            node.Flags |= EClassFlags.Localized;
+                        }
+                        if (decl.IsOrHasInstancedObjectProperty())
+                        {
+                            node.Flags |= EClassFlags.HasInstancedProps;
+                        }
                     }
 
                     return Success;
@@ -263,10 +296,13 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
             {
                 if (needsAdd)
                 {
-                    node.VarType.Outer = node;
-                    if (!Symbols.TryResolveType(ref node.VarType))
+                    if (node.VarType is not PrimitiveType)
                     {
-                        return Error($"No type named '{node.VarType.Name}' exists!", node.VarType.StartPos, node.VarType.EndPos);
+                        node.VarType.Outer = node;
+                        if (!Symbols.TryResolveType(ref node.VarType))
+                        {
+                            return Error($"No type named '{node.VarType.Name}' exists!", node.VarType.StartPos, node.VarType.EndPos);
+                        }
                     }
 
                     if (Symbols.SymbolExistsInCurrentScope(node.Name))
@@ -308,10 +344,6 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                         if (!node.Flags.Has(EPropertyFlags.Native) && StructNeedsCtorLink(strct, new Stack<Struct> { strct }))
                         {
                             node.Flags |= EPropertyFlags.NeedCtorLink;
-                        }
-                        if (strct.Flags.Has(ScriptStructFlags.Transient))
-                        {
-                            node.Flags |= EPropertyFlags.Transient;
                         }
                         break;
                 }
@@ -389,9 +421,9 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                 if (!Symbols.TryAddType(node))
                 {
                     //Structs do not have to be globally unique, but they do have to be unique within a scope
-                    if (((ObjectType)node.Outer).TypeDeclarations.Any(decl => decl != node && decl.Name.CaseInsensitiveEquals(node.Name)))
+                    if (node.Outer is ObjectType nodeOuter && nodeOuter.TypeDeclarations.Any(decl => decl != node && decl.Name.CaseInsensitiveEquals(node.Name)))
                     {
-                        return Error($"A type named '{node.Name}' already exists in this {node.Outer.GetType().Name.ToLower()}!", node.StartPos, node.EndPos);
+                        return Error($"A type named '{node.Name}' already exists in this {nodeOuter.GetType().Name.ToLower()}!", node.StartPos, node.EndPos);
                     }
                 }
 
@@ -405,11 +437,8 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                 }
 
                 Symbols.PopScope();
-
-                return Success;
             }
-
-            if (Pass == ValidationPass.ClassAndStructMembersAndFunctionParams)
+            else if (Pass == ValidationPass.ClassAndStructMembersAndFunctionParams)
             {
                 string parentScope = null;
                 if (node.Parent != null)
@@ -438,17 +467,23 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                 {
                     decl.Outer = node;
                     Success = Success && decl.AcceptVisitor(this);
-                    //todo: verify that the member does not attempt to override a member from a parent struct
+
+                    var parentStruct = node.Parent as Struct;
+                    while (parentStruct is not null)
+                    {
+                        if (parentStruct.VariableDeclarations.Any(parentVarDecl => parentVarDecl.Name.CaseInsensitiveEquals(decl.Name)))
+                        {
+                            Log.LogWarning($"A member name '{decl.Name}' exists in a parent struct. Are you sure you want to shadow it?", decl.StartPos, decl.EndPos);
+                        }
+                        parentStruct = parentStruct.Parent as Struct;
+                    }
                 }
 
                 Symbols.PopScope();
 
                 node.Declaration = node;
-
-                return Success;
             }
-
-            if (Pass == ValidationPass.BodyPass)
+            else if (Pass == ValidationPass.BodyPass)
             {
                 if (node.Parent is Struct parentStruct && parentStruct.SameOrSubStruct(node.Name))
                 {
@@ -459,60 +494,93 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
                 foreach (VariableDeclaration decl in node.VariableDeclarations)
                 {
                     Success &= decl.AcceptVisitor(this);
-                    if (decl.Flags.Has(EPropertyFlags.Component))
-                    {
-                        node.Flags |= ScriptStructFlags.HasComponents;
-                    }
+                }
+                if (HasComponents(node))
+                {
+                    node.Flags |= ScriptStructFlags.HasComponents;
                 }
 
-                return Success;
+                static bool HasComponents(Struct strct)
+                {
+                    bool hasComponents = false;
+                    foreach (VariableDeclaration decl in strct.VariableDeclarations)
+                    {
+                        if (decl.Flags.Has(EPropertyFlags.Component))
+                        {
+                            hasComponents = true;
+                        }
+                        var varType = decl.VarType is StaticArrayType staticArrayType ? staticArrayType.ElementType : decl.VarType;
+                        if (varType is DynamicArrayType dynArrType)
+                        {
+                            varType = dynArrType.ElementType;
+                        }
+                        if (varType is Struct innerStruct && (innerStruct.Flags.Has(ScriptStructFlags.HasComponents) || HasComponents(innerStruct)))
+                        {
+                            decl.Flags |= EPropertyFlags.Component;
+                            hasComponents = true;
+                        }
+                    }
+                    return hasComponents;
+                }
             }
             return Success;
         }
 
         public bool VisitNode(Enumeration node)
         {
-            if (!Symbols.TryAddType(node))
+            if (Pass == ValidationPass.TypesAndFunctionNamesAndStateNames)
             {
-                //Enums do not have to be globally unique, but they do have to be unique within a scope
-                if (((ObjectType)node.Outer).TypeDeclarations.Any(decl => decl != node && decl.Name.CaseInsensitiveEquals(node.Name)))
+                if (!Symbols.TryAddType(node))
                 {
-                    return Error($"A type named '{node.Name}' already exists in this {node.Outer.GetType().Name.ToLower()}!", node.StartPos, node.EndPos);
+                    //Enums do not have to be globally unique, but they do have to be unique within a scope
+                    if (((ObjectType)node.Outer).TypeDeclarations.Any(decl => decl != node && decl.Name.CaseInsensitiveEquals(node.Name)))
+                    {
+                        return Error($"A type named '{node.Name}' already exists in this {node.Outer.GetType().Name.ToLower()}!", node.StartPos, node.EndPos);
+                    }
                 }
+
+                Symbols.PushScope(node.Name);
+
+                string maxName = node.GenerateMaxName();
+
+                foreach (EnumValue enumVal in node.Values)
+                {
+                    enumVal.Outer = node;
+                    if (!Symbols.TryAddSymbol(enumVal.Name, enumVal))
+                    {
+                        return Error($"'{enumVal.Name}' already exists in this enum!", enumVal.StartPos, enumVal.EndPos);
+                    }
+                    ;
+                    if (maxName.CaseInsensitiveEquals(enumVal.Name))
+                    {
+                        return Error($"'{maxName}' is the autogenerated end value for this enum! It cannot be used as a regular value.", enumVal.StartPos, enumVal.EndPos);
+                    }
+                }
+
+                Symbols.PopScope();
+
+                node.Declaration = node;
             }
-
-            Symbols.PushScope(node.Name);
-
-            foreach (EnumValue enumVal in node.Values)
-            {
-                enumVal.Outer = node;
-                Symbols.AddSymbol(enumVal.Name, enumVal);
-            }
-
-            Symbols.PopScope();
-
-            // Add enum values at the class scope so they can be used without being explicitly qualified.
-            foreach (EnumValue enumVal in node.Values)
-                Symbols.TryAddSymbol(enumVal.Name, enumVal);
-
-            node.Declaration = node;
 
             return Success;
         }
 
         public bool VisitNode(Const node)
         {
-            if (!Symbols.TryAddType(node))
+            if (Pass == ValidationPass.TypesAndFunctionNamesAndStateNames)
             {
-                //Consts do not have to be globally unique, but they do have to be unique within a scope
-                if (((ObjectType)node.Outer).TypeDeclarations.Any(decl => decl != node && decl.Name.CaseInsensitiveEquals(node.Name)))
+                if (!Symbols.TryAddType(node))
                 {
-                    return Error($"A type named '{node.Name}' already exists in this {node.Outer.GetType().Name.ToLower()}!", node.StartPos, node.EndPos);
+                    //Consts do not have to be globally unique, but they do have to be unique within a scope
+                    if (((ObjectType)node.Outer).TypeDeclarations.Any(decl => decl != node && decl.Name.CaseInsensitiveEquals(node.Name)))
+                    {
+                        return Error($"A type named '{node.Name}' already exists in this {node.Outer.GetType().Name.ToLower()}!", node.StartPos, node.EndPos);
+                    }
                 }
+
+
+                node.Declaration = node;
             }
-
-
-            node.Declaration = node;
 
             return Success;
         }
@@ -809,6 +877,8 @@ namespace LegendaryExplorerCore.UnrealScript.Analysis.Visitors
         { throw new NotImplementedException(); }
 
         public bool VisitNode(ExpressionOnlyStatement node)
+        { throw new NotImplementedException(); }
+        public bool VisitNode(ReplicationStatement node)
         { throw new NotImplementedException(); }
         public bool VisitNode(ErrorStatement node)
         { throw new NotImplementedException(); }

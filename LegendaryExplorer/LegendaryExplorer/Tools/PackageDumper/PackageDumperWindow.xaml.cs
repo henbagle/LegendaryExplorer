@@ -204,7 +204,7 @@ namespace LegendaryExplorer.Tools.PackageDumper
             if (m.ShowDialog(this) == CommonFileDialogResult.Ok)
             {
                 string outputDir = m.FileName;
-                await DumpPackages(MELoadedFiles.GetFilesLoadedInGame(game).Values.ToList(), outputDir);
+                await DumpPackages(MELoadedFiles.GetFilesLoadedInGame(game, true).Values.ToList(), outputDir);
             }
         }
 
@@ -565,7 +565,7 @@ namespace LegendaryExplorer.Tools.PackageDumper
                 for (int x = 0; x < pcc.Imports.Count; x++)
                 {
                     ImportEntry imp = pcc.Imports[x];
-                    stringoutput.WriteLine($"#{imp.UIndex}: {imp.InstancedFullPath}(From: {imp.PackageFile}) (Offset: 0x {pcc.ImportOffset + (x * ImportEntry.headerSize):X4})");
+                    stringoutput.WriteLine($"#{imp.UIndex}: {imp.InstancedFullPath}(From: {imp.PackageFile}) (Offset: 0x {pcc.ImportOffset + (x * ImportEntry.HeaderLength):X4})");
                 }
                 stringoutput.WriteLine("--End of Imports");
                 //}

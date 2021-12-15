@@ -74,10 +74,10 @@ namespace LegendaryExplorerCore.Packages
 
                         //make data offset and data size the same, as the exports could be the same even if it was appended later.
                         //The datasize being different is a data difference not a true header difference so we won't list it here.
-                        byte[] header1 = exp1.Header.ArrayClone();
-                        byte[] header2 = exp2.Header.ArrayClone();
-                        Buffer.BlockCopy(BitConverter.GetBytes((long)0), 0, header1, 32, sizeof(long));
-                        Buffer.BlockCopy(BitConverter.GetBytes((long)0), 0, header2, 32, sizeof(long));
+                        byte[] header1 = exp1.GenerateHeader();
+                        byte[] header2 = exp2.GenerateHeader();
+                        Buffer.BlockCopy(BitConverter.GetBytes((long)0), 0, header1, ExportEntry.OFFSET_DataSize, sizeof(long));
+                        Buffer.BlockCopy(BitConverter.GetBytes((long)0), 0, header2, ExportEntry.OFFSET_DataSize, sizeof(long));
 
                         if (!header1.AsSpan().SequenceEqual(header2))
                         {
@@ -122,7 +122,7 @@ namespace LegendaryExplorerCore.Packages
                     {
                         ImportEntry imp1 = Imports[i];
                         ImportEntry imp2 = compareFile.Imports[i];
-                        if (!imp1.Header.AsSpan().SequenceEqual(imp2.Header))
+                        if (!imp1.GenerateHeader().AsSpan().SequenceEqual(imp2.GenerateHeader()))
                         {
                             changedImports.Add(new EntryStringPair(imp1,
                                 $"Import header has changed: {imp1.UIndex} {imp1.InstancedFullPath}"));
@@ -235,7 +235,7 @@ namespace LegendaryExplorerCore.Packages
                         Debug.WriteLine($@"EXPORT DATA SIZE DIFFERENCE: {exp1.UIndex} {exp1.InstancedFullPath} Left: {exp1.DataSize} Right {exp2.DataSize}");
                     }
 
-                    if (exp2.Header.Length != exp1.Header.Length)
+                    if (exp2.HeaderLength != exp1.HeaderLength)
                     {
                         Debug.WriteLine($@"EXPORT HEADER SIZE DIFFERENCE: {exp1.UIndex} {exp1.InstancedFullPath} Left: {exp1.DataSize} Right {exp2.DataSize}");
                     }
@@ -319,6 +319,28 @@ namespace LegendaryExplorerCore.Packages
                     Debug.WriteLine($"Export {exp1.InstancedFullPath} not found in other package!");
                 }
             }
+        }
+
+        //Todo put this somewhere more appropriate
+        public static void DebugByteArrayComparison(byte[] arr1, byte[] arr2)
+        {
+            var maxLenToCheck = Math.Min(arr1.Length, arr2.Length);
+            for (int i = 0; i < maxLenToCheck; i++)
+            {
+                if (arr1[i] != arr2[i])
+                {
+                    Debug.WriteLine($"Bytes differ at 0x{i:X8}: First{arr1[i]}, Second: {arr2[i]}");
+                    return;
+                }
+            }
+
+            if (arr1.Length != arr2.Length)
+            {
+                Debug.WriteLine("Arrays are of different lengths");
+                return;
+            }
+
+            Debug.WriteLine("Arrays are identical");
         }
 
         private void PrePropCheck(ExportEntry exp1, ExportEntry exp2)
@@ -501,7 +523,6 @@ namespace LegendaryExplorerCore.Packages
             var uindices2 = objBin2.GetUIndexes(exp2.FileRef.Game);
 
             // Now we iterate through written binary looking for values
-            int misMatchStart = -1;
             for (int pos = 0; pos < originalWrittenBin1.Length; pos++)
             {
                 if (isDebug && pos == 0x171)

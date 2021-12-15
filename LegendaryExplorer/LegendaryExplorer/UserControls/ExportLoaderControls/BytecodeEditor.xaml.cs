@@ -107,12 +107,12 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
 
         private bool CanNopOutStatement(object obj)
         {
-            return obj is Statement && CurrentLoadedExport != null && CurrentLoadedExport.Game < MEGame.ME3; // We only support nop on ME1/ME2 cause they don't use memory jumps. memory jumps complicate things
+            return obj is Statement && CurrentLoadedExport is {Game: < MEGame.ME3}; // We only support nop on ME1/ME2 cause they don't use memory jumps. memory jumps complicate things
         }
 
         public override bool CanParse(ExportEntry exportEntry)
         {
-            return ((exportEntry.ClassName is "Function" or "State") && exportEntry.FileRef.Game != MEGame.UDK);
+            return exportEntry.FileRef.Game != MEGame.UDK && (exportEntry.ClassName is "Function" or "State" || exportEntry.IsClass && exportEntry.GetBinaryData<UClass>().ScriptStorageSize > 0);
         }
 
         public override void LoadExport(ExportEntry exportEntry)
@@ -154,17 +154,17 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             DecompiledScriptBoxTitle = "Decompiled Script";
             if (Pcc.Game is MEGame.ME3 or MEGame.LE1 or  MEGame.LE2 or MEGame.LE3 || Pcc.Platform == MEPackage.GamePlatform.PS3)
             {
-                var func = new Function(data, CurrentLoadedExport, 32);
+                var func = new Function(data, CurrentLoadedExport);
                 func.ParseFunction();
                 DecompiledScriptBlocks.Add(func.GetSignature());
                 DecompiledScriptBlocks.AddRange(func.ScriptBlocks);
                 TokenList.AddRange(func.SingularTokenList);
 
 
-                int pos = 12;
+                int pos = CurrentLoadedExport.IsClass ? 4 : 12;
 
                 var functionSuperclass = EndianReader.ToInt32(data, pos, CurrentLoadedExport.FileRef.Endian);
-                ScriptHeaderBlocks.Add(new ScriptHeaderItem("Function superclass", functionSuperclass, pos, functionSuperclass != 0 ? CurrentLoadedExport.FileRef.GetEntry(functionSuperclass) : null));
+                ScriptHeaderBlocks.Add(new ScriptHeaderItem($"{CurrentLoadedExport.ClassName} superclass", functionSuperclass, pos, functionSuperclass != 0 ? CurrentLoadedExport.FileRef.GetEntry(functionSuperclass) : null));
 
                 pos += 4;
                 var nextItemCompilingChain = EndianReader.ToInt32(data, pos, CurrentLoadedExport.FileRef.Endian);
@@ -245,8 +245,8 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                 {
                     //State
                     //parse remaining
-                    var footerstartpos = 0x20 + diskSize;
-                    var footerdata = CurrentLoadedExport.DataReadOnly.Slice(0x20 + diskSize, CurrentLoadedExport.DataSize - (0x20 + diskSize));
+                    var footerstartpos = pos + diskSize;
+                    var footerdata = CurrentLoadedExport.DataReadOnly.Slice(footerstartpos, CurrentLoadedExport.DataSize - footerstartpos);
                     var fpos = 0;
                     ScriptFooterBlocks.Add(new ScriptHeaderItem("Probemask?", "??", fpos + footerstartpos) { length = 8 });
                     fpos += 0x8;
@@ -291,31 +291,32 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             else if (Pcc.Game is MEGame.ME1 or MEGame.ME2)
             {
                 //Header
-                int pos = 16;
+                int pos = CurrentLoadedExport.IsClass ? 4 : 12;
+                var functionSuperclass = EndianReader.ToInt32(data, pos, CurrentLoadedExport.FileRef.Endian);
+                ScriptHeaderBlocks.Add(new ScriptHeaderItem($"{CurrentLoadedExport.ClassName} superclass", functionSuperclass, pos, functionSuperclass != 0 ? CurrentLoadedExport.FileRef.GetEntry(functionSuperclass) : null));
+                pos += 4;
+
                 var nextItemCompilingChain = EndianReader.ToInt32(data, pos, CurrentLoadedExport.FileRef.Endian);
                 ScriptHeaderBlocks.Add(new ScriptHeaderItem("Next item in loading chain", nextItemCompilingChain, pos, nextItemCompilingChain > 0 ? CurrentLoadedExport : null));
 
-                pos += Pcc.Game.IsLEGame() ? 4 : 8;
+                pos += 8;
                 nextItemCompilingChain = EndianReader.ToInt32(data, pos, CurrentLoadedExport.FileRef.Endian);
                 ScriptHeaderBlocks.Add(new ScriptHeaderItem("Children Probe Start", nextItemCompilingChain, pos, nextItemCompilingChain > 0 ? CurrentLoadedExport : null));
 
-                pos += Pcc.Game.IsLEGame() ? 4 : 8;
+                pos += 8;
                 ScriptHeaderBlocks.Add(new ScriptHeaderItem("Line", EndianReader.ToInt32(data, pos, CurrentLoadedExport.FileRef.Endian), pos));
 
                 pos += 4;
 
-                if (!Pcc.Game.IsLEGame())
-                {
-                    ScriptHeaderBlocks.Add(new ScriptHeaderItem("TextPos", EndianReader.ToInt32(data, pos, CurrentLoadedExport.FileRef.Endian), pos));
-                    pos += 4;
-                }
+                ScriptHeaderBlocks.Add(new ScriptHeaderItem("TextPos", EndianReader.ToInt32(data, pos, CurrentLoadedExport.FileRef.Endian), pos));
+                pos += 4;
 
 
                 int scriptSize = EndianReader.ToInt32(data, pos, CurrentLoadedExport.FileRef.Endian);
                 ScriptHeaderBlocks.Add(new ScriptHeaderItem("Script Size", scriptSize, pos));
                 pos += 4;
                 BytecodeStart = pos;
-                var func = CurrentLoadedExport.ClassName == "State" ? UE3FunctionReader.ReadState(CurrentLoadedExport, data) : UE3FunctionReader.ReadFunction(CurrentLoadedExport, data);
+                var func = CurrentLoadedExport.ClassName == "Function" ? UE3FunctionReader.ReadFunction(CurrentLoadedExport, data) : UE3FunctionReader.ReadState(CurrentLoadedExport, data);
                 func.Decompile(new TextBuilder(), false, true); //parse bytecode
 
                 bool defined = func.HasFlag("Defined");
@@ -473,7 +474,12 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                 //Find which decompiled script block the cursor belongs to
                 ListBox selectedBox = null;
                 var allBoxesToUpdate = new List<ListBox>(new[] { Function_ListBox, Function_Header, Function_Footer });
-                if (start >= 0x20 && start < CurrentLoadedExport.DataSize - 6)
+                int bytecodeStart = Pcc.Game is MEGame.ME1 or MEGame.ME2 ? 0x2C : 0x20;
+                if (CurrentLoadedExport.IsClass)
+                {
+                    bytecodeStart -= 8;
+                }
+                if (start >= bytecodeStart && start < CurrentLoadedExport.DataSize - 6)
                 {
                     Token token = null;
                     foreach (object o in DecompiledScriptBlocks)
@@ -498,7 +504,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                     }
                     selectedBox = Function_ListBox;
                 }
-                if (start >= 0x0C && start < 0x20)
+                else if (start >= 0x0C && start < bytecodeStart)
                 {
                     //header
                     int index = (start - 0xC) / 4;
@@ -506,7 +512,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                     selectedBox = Function_Header;
 
                 }
-                if (start > CurrentLoadedExport.DataSize - 6)
+                else if (start > CurrentLoadedExport.DataSize - 6)
                 {
                     //footer
                     //yeah yeah I know this is very specific code.
@@ -545,12 +551,17 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         private void ScriptEditor_PreviewScript_Click(object sender, RoutedEventArgs e)
         {
             byte[] newBytes = ((ReadOptimizedByteProvider)ScriptEditor_Hexbox.ByteProvider).Span.ToArray();
-            if (CurrentLoadedExport.Game == MEGame.ME3)
+            if (CurrentLoadedExport.Game >= MEGame.ME3)
             {
                 int sizeDiff = newBytes.Length - CurrentLoadedExport.DataSize;
-                int diskSize = EndianReader.ToInt32(CurrentLoadedExport.DataReadOnly, 0x1C, CurrentLoadedExport.FileRef.Endian);
+                int offset = 0x1C;
+                if (CurrentLoadedExport.IsClass)
+                {
+                    offset -= 8;
+                }
+                int diskSize = EndianReader.ToInt32(CurrentLoadedExport.DataReadOnly, offset, CurrentLoadedExport.FileRef.Endian);
                 diskSize += sizeDiff;
-                newBytes.OverwriteRange(0x1C, EndianBitConverter.GetBytes(diskSize, Pcc.Endian));
+                newBytes.OverwriteRange(offset, EndianBitConverter.GetBytes(diskSize, Pcc.Endian));
             }
             StartFunctionScan(newBytes);
         }
@@ -559,12 +570,17 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         {
             ((ReadOptimizedByteProvider)ScriptEditor_Hexbox.ByteProvider).ApplyChanges();
             byte[] newBytes = ((ReadOptimizedByteProvider)ScriptEditor_Hexbox.ByteProvider).Span.ToArray();
-            if (CurrentLoadedExport.Game == MEGame.ME3)
+            if (CurrentLoadedExport.Game >= MEGame.ME3)
             {
                 int sizeDiff = newBytes.Length - CurrentLoadedExport.DataSize;
-                int diskSize = EndianReader.ToInt32(CurrentLoadedExport.DataReadOnly, 0x1C, CurrentLoadedExport.FileRef.Endian);
+                int offset = 0x1C;
+                if (CurrentLoadedExport.IsClass)
+                {
+                    offset -= 8;
+                }
+                int diskSize = EndianReader.ToInt32(CurrentLoadedExport.DataReadOnly, offset, CurrentLoadedExport.FileRef.Endian);
                 diskSize += sizeDiff;
-                newBytes.OverwriteRange(0x1C, EndianBitConverter.GetBytes(diskSize, Pcc.Endian));
+                newBytes.OverwriteRange(offset, EndianBitConverter.GetBytes(diskSize, Pcc.Endian));
             }
             CurrentLoadedExport.Data = newBytes;
         }

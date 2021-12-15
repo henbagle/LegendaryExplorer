@@ -378,7 +378,7 @@ namespace LegendaryExplorerCore.Packages.CloningImportingAndRelinking
                 // Can't access idx vars so we have to do this
                 var pf = getName();
             }
-            catch (Exception e)
+            catch (Exception)
             {
 
                 item.AddBlockingError(localizationDelegate(ME3XL.string_interp_refCheckInvalidNameValue, relativePath ?? fName, nameBeingChecked, itemBeingChecked), entry);
@@ -479,7 +479,7 @@ namespace LegendaryExplorerCore.Packages.CloningImportingAndRelinking
                             if (referencedEntry.ClassName == @"Class")
                             {
                                 // Inherits
-                                if (!referencedEntry.InheritsFrom(propInfo.Reference, customClassInfos))
+                                if (!GlobalUnrealObjectInfo.IsA(referencedEntry.ObjectName.Name, propInfo.Reference, referencedEntry.Game, customClassInfos, (entry as ExportEntry)?.SuperClassName))
                                 {
                                     if (op.Name.Name != null)
                                     {

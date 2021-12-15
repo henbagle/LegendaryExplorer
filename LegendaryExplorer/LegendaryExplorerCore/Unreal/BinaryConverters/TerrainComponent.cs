@@ -18,7 +18,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
 
         protected override void Serialize(SerializingContainer2 sc)
         {
-            sc.Serialize(ref CollisionVertices, SCExt.Serialize);
+            sc.Serialize(ref CollisionVertices);
             sc.Serialize(ref BVTree, SCExt.Serialize);
             sc.Serialize(ref PatchBounds, SCExt.Serialize);
             sc.Serialize(ref LightMap);
@@ -91,7 +91,10 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             sc.Serialize(ref node.NodeIndex1);
             sc.Serialize(ref node.NodeIndex2);
             sc.Serialize(ref node.NodeIndex3);
-            sc.Serialize(ref node.unk);
+            if (sc.Game != MEGame.UDK)
+            {
+                sc.Serialize(ref node.unk);
+            }
         }
         public static void Serialize(this SerializingContainer2 sc, ref TerrainPatchBounds bounds)
         {

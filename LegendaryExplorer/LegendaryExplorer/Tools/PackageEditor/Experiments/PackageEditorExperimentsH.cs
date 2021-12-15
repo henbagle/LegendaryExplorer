@@ -15,15 +15,17 @@ using LegendaryExplorerCore.Kismet;
 using LegendaryExplorerCore.Misc;
 using LegendaryExplorerCore.Packages;
 using LegendaryExplorerCore.Packages.CloningImportingAndRelinking;
+using LegendaryExplorerCore.TLK;
 using LegendaryExplorerCore.TLK.ME1;
 using LegendaryExplorerCore.Unreal;
 using LegendaryExplorerCore.Unreal.BinaryConverters;
 using Microsoft.WindowsAPICodePack.Dialogs;
 using Newtonsoft.Json;
+using BioMorphFace = LegendaryExplorerCore.Unreal.Classes.BioMorphFace;
 
 namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 {
-    static internal class PackageEditorExperimentsH
+    internal static class PackageEditorExperimentsH
     {
         /// <summary>
         /// Collects all TLK exports from the entire ME1 game and exports them into a single GlobalTLK file
@@ -31,8 +33,22 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
         /// <param name="pew">Instance of Package Editor</param>
         public static void BuildME1SuperTLKFile (PackageEditorWindow pew)
         {
-            string myBasePath = ME1Directory.DefaultGamePath;
-            string searchDir = ME1Directory.CookedPCPath;
+            string gameString = InputComboBoxDialog.GetValue(pew, "Choose game to create SuperTLK for:",
+                "Create SuperTLK file", new[] { "LE1", "ME1" }, "LE1");
+            var game = Enum.Parse<MEGame>(gameString);
+            if(!game.IsGame1()) return;
+
+            var locPrompt = new PromptDialog("Enter file localization suffix to scan",
+                "Create SuperTLK file", "_INT")
+            {
+                Owner = pew
+            };
+            locPrompt.ShowDialog();
+            if (locPrompt.DialogResult == false) return;
+            var locSuffix = locPrompt.ResponseText;
+
+            string myBasePath = MEDirectories.GetDefaultGamePath(game);
+            string searchDir = MEDirectories.GetCookedPath(game);
 
             CommonOpenFileDialog d = new CommonOpenFileDialog { Title = "Select folder to search", IsFolderPicker = true, InitialDirectory = myBasePath };
             if (d.ShowDialog() == CommonFileDialogResult.Ok)
@@ -40,9 +56,10 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 searchDir = d.FileName;
             }
 
-            Microsoft.Win32.OpenFileDialog outputFileDialog = new () { 
+            var filter = game is MEGame.LE1 ? "*.pcc|*.pcc" : "*.upk|*.upk";
+            Microsoft.Win32.OpenFileDialog outputFileDialog = new () {
                 Title = "Select GlobalTlk file to output to (GlobalTlk exports will be completely overwritten)", 
-                Filter = "*.upk|*.upk" };
+                Filter = filter };
             bool? result = outputFileDialog.ShowDialog();
             if (!result.HasValue || !result.Value)
             {
@@ -51,7 +68,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             }
             string outputFilePath = outputFileDialog.FileName;
 
-            string[] extensions = { ".u", ".upk" };
+            string[] extensions = { ".u", ".upk", ".pcc" };
 
             pew.IsBusy = true;
 
@@ -69,6 +86,11 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 {
                     pew.BusyText = $"[{i}/{files.Length}] Scanning Packages for TLK Exports";
                     int basePathLen = myBasePath.Length;
+                    if ((f.Name.Contains("LOC") || f.Name.Contains("Startup")) && !f.Name.Contains(locSuffix))
+                    {
+                        i++;
+                        continue;
+                    }
                     using (IMEPackage pack = MEPackageHandler.OpenMEPackage(f.FullName))
                     {
                         List<ExportEntry> tlkExports = pack.Exports.Where(x =>
@@ -110,16 +132,16 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                         {
                             var stringMapping = (exp.ObjectName == "GlobalTlk_tlk" ? tlkLines : tlkLines_m);
                             var talkFile = new ME1TalkFile(exp);
-                            var LoadedStrings = new List<ME1TalkFile.TLKStringRef>();
+                            var LoadedStrings = new List<TLKStringRef>();
                             foreach (var tlkString in stringMapping)
                             {
                                 // Do the important part
-                                LoadedStrings.Add(new ME1TalkFile.TLKStringRef(tlkString.Key, 1, tlkString.Value));
+                                LoadedStrings.Add(new TLKStringRef(tlkString.Key, tlkString.Value, 1));
                             }
 
                             HuffmanCompression huff = new HuffmanCompression();
                             huff.LoadInputData(LoadedStrings);
-                            huff.serializeTalkfileToExport(exp);
+                            huff.SerializeTalkfileToExport(exp);
                         }
                     }
                     o.Save();
@@ -128,10 +150,11 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
                 return total;
 
-            }).ContinueWithOnUIThread((total) =>
+            }).ContinueWithOnUIThread(async (total) =>
             {
+                var actualTotal = await total;
                 pew.IsBusy = false;
-                pew.StatusBar_LeftMostText.Text = $"Wrote {total} lines to {outputFilePath}";
+                pew.StatusBar_LeftMostText.Text = $"Wrote {actualTotal} lines to {outputFilePath}";
             });
 
         }
@@ -237,6 +260,50 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
             var toc = new TOCBinFile(inputFile);
             toc.DumpTOCToTxtFile(outputFile);
+        }
+
+        public static void ExportMorphFace(PackageEditorWindow pew)
+        {
+            if (pew.TryGetSelectedExport(out var export) && export.ClassName == "BioMorphFace")
+            {
+                if (UModelHelper.GetLocalUModelVersion() < UModelHelper.SupportedUModelBuildNum)
+                {
+                    MessageBox.Show("UModel not installed or incorrect version!");
+                    return;
+                }
+                pew.IsBusy = true;
+                pew.BusyText = "Applying MorphFace to head mesh...";
+                var morphFace = new BioMorphFace(export);
+                var rop = new RelinkerOptionsPackage();
+
+                // Create a new file containing only the headmesh
+                var tempFilePath = Path.Combine(Path.GetTempPath(), "HeadMeshExport.pcc");
+                if(File.Exists(tempFilePath)) File.Delete(tempFilePath);
+                MEPackageHandler.CreateAndSavePackage(tempFilePath, export.Game);
+                using var tempFile = MEPackageHandler.OpenMEPackage(tempFilePath);
+                EntryImporter.ImportAndRelinkEntries(EntryImporter.PortingOption.CloneAllDependencies,
+                    morphFace.m_oBaseHead, tempFile, null, true, rop, out var clonedHeadEntry);
+                var clonedHead = clonedHeadEntry as ExportEntry;
+                var appliedHead = morphFace.Apply();
+
+                // Clone materials
+                for (var i = 0; i < appliedHead.Materials.Length; i++)
+                {
+                    var originalMat = export.FileRef.GetEntry(appliedHead.Materials[i].value);
+                    EntryImporter.ImportAndRelinkEntries(EntryImporter.PortingOption.CloneAllDependencies,
+                        originalMat, tempFile, null, true, rop, out var clonedMat);
+                    appliedHead.Materials[i] = new UIndex(clonedMat.UIndex);
+                }
+                clonedHead.WriteBinary(appliedHead);
+                clonedHead.ObjectName = new NameReference(export.ObjectNameString);
+                tempFile.Save();
+
+                // Export the cloned headmesh
+                pew.BusyText = "Exporting via UModel...";
+                UModelHelper.ExportViaUModel(pew, clonedHead);
+                //File.Delete(tempFilePath);
+                pew.IsBusy = false;
+            }
         }
 
         public static void LE1Elevator(PackageEditorWindow getPeWindow)
@@ -369,19 +436,19 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 var startupM = new ME1TalkFile((ExportEntry) startup.GetEntry(4));
 
                 var globalF = (ExportEntry) global.GetEntry(1);
-                var stringsF = new List<ME1TalkFile.TLKStringRef>();
+                var stringsF = new List<TLKStringRef>();
                 var globalM = (ExportEntry) global.GetEntry(2);
-                var stringsM = new List<ME1TalkFile.TLKStringRef>();
+                var stringsM = new List<TLKStringRef>();
 
                 foreach (var id in stringIds)
                 {
                     if (id >= 200000) continue;
-                    var fStr = startupF.findDataById(id);
-                    var mStr = startupM.findDataById(id);
+                    var fStr = startupF.FindDataById(id);
+                    var mStr = startupM.FindDataById(id);
                     fStr = fStr.Substring(1, fStr.Length - 2);
                     mStr = mStr.Substring(1, mStr.Length - 2);
-                    stringsF.Add(new ME1TalkFile.TLKStringRef(id, 1, fStr));
-                    stringsM.Add(new ME1TalkFile.TLKStringRef(id, 1, mStr));
+                    stringsF.Add(new TLKStringRef(id, fStr));
+                    stringsM.Add(new TLKStringRef(id, mStr));
                 }
 
                 HuffmanCompression hcf = new HuffmanCompression();
@@ -389,8 +456,8 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
                 hcf.LoadInputData(stringsF);
                 hcm.LoadInputData(stringsM);
-                hcf.serializeTalkfileToExport(globalF);
-                hcm.serializeTalkfileToExport(globalM);
+                hcf.SerializeTalkfileToExport(globalF);
+                hcm.SerializeTalkfileToExport(globalM);
                 global.Save();
             }
 
@@ -529,7 +596,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             {
                 // Check this DecalComponent contains the decal we're looking for, if not continue
                 var receivers = decalComponent.GetProperty<ArrayProperty<StructProperty>>("DecalReceivers")?.Values ?? new List<StructProperty>();
-                if (receivers.All(property => property.GetPropOrDefault<ObjectProperty>("Component").Value != smcSourceUindex)) continue;
+                if (receivers.All(property => property.GetProp<ObjectProperty>("Component").Value != smcSourceUindex)) continue;
 
                 // Bad hack because the reindexer isn't working - don't do this
                 decalComponent.Parent.ObjectName = new NameReference(decalComponent.Parent.ObjectName.Name,
@@ -537,7 +604,7 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
                 // Import the Decal tree into the new file
                 EntryImporter.ImportAndRelinkEntries(EntryImporter.PortingOption.CloneTreeAsChild, decalComponent.Parent, o,
-                    o.FindEntry("TheWorld.PersistentLevel"), true, out IEntry clonedDecalEntry);
+                    o.FindEntry("TheWorld.PersistentLevel"), true, new RelinkerOptionsPackage(),out IEntry clonedDecalEntry);
                 ExportEntry newDecalComponent = clonedDecalEntry.GetChildren().FirstOrDefault(e => e.ClassName == "DecalComponent") as ExportEntry;
                 o.AddToLevelActorsIfNotThere(decalComponent.Parent as ExportEntry);
 

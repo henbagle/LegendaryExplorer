@@ -66,7 +66,7 @@ namespace LegendaryExplorer.Tools.TlkManagerNS
                 //TODO: Need to find a way for the export loader to register usage of the pcc.
                 IMEPackage pcc = MEPackageHandler.OpenMEPackage(tlk.tlkPath);
                 var export = pcc.GetUExport(tlk.exportNumber);
-                var elhw = new ExportLoaderHostedWindow(new TLKEditor(), export)
+                var elhw = new ExportLoaderHostedWindow(new TLKEditorExportLoader(), export)
                 {
                     Title = $"TLK Editor - {export.UIndex} {export.InstancedFullPath} - {export.FileRef.FilePath}"
                 };
@@ -103,7 +103,7 @@ namespace LegendaryExplorer.Tools.TlkManagerNS
                             if (!pcc.Game.IsGame1())
                                 throw new Exception($@"ME1/LE1 pacakges are the only ones that contain TLK exports. The selected package is for {pcc.Game}");
                             var talkfile = new ME1TalkFile(pcc, tlk.exportNumber);
-                            talkfile.saveToFile(saveFileDialog.FileName);
+                            talkfile.SaveToXML(saveFileDialog.FileName);
                         };
                     }
                     else
@@ -111,9 +111,9 @@ namespace LegendaryExplorer.Tools.TlkManagerNS
                         //ME2,ME3
                         loadingWorker.DoWork += delegate
                         {
-                            var tf = new TalkFile();
+                            var tf = new ME2ME3TalkFile();
                             tf.LoadTlkData(tlk.tlkPath);
-                            tf.DumpToFile(saveFileDialog.FileName);
+                            tf.SaveToXML(saveFileDialog.FileName);
                         };
                     }
                     loadingWorker.RunWorkerCompleted += delegate
@@ -148,7 +148,7 @@ namespace LegendaryExplorer.Tools.TlkManagerNS
                             LegendaryExplorerCore.TLK.ME1.HuffmanCompression compressor = new();
                             compressor.LoadInputData(openFileDialog.FileName);
                             using IMEPackage pcc = MEPackageHandler.OpenME1Package(tlk.tlkPath);
-                            compressor.serializeTalkfileToExport(pcc.GetUExport(tlk.exportNumber), true);
+                            compressor.SerializeTalkfileToExport(pcc.GetUExport(tlk.exportNumber), true);
                         };
                     }
                     else

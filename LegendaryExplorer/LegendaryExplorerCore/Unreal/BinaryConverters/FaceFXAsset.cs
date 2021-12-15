@@ -9,6 +9,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
 {
     public class FaceFXAsset : ObjectBinary
     {
+        public int Version;
         private List<HNode> HNodes;
         public List<string> Names;
         public List<FaceFXBoneNode> BoneNodes;
@@ -31,7 +32,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             int length = 0;
             sc.Serialize(ref length);
 
-            sc.SerializeFaceFXHeader();
+            sc.SerializeFaceFXHeader(ref Version);
 
             sc.Serialize(ref HNodes, SCExt.Serialize);
             sc.Serialize(ref Names, SCExt.SerializeFaceFXString);
@@ -66,14 +67,20 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             sc.Serialize(ref TableD, SCExt.Serialize);
             sc.Serialize(ref LipSyncPhonemeNames, SCExt.Serialize);
 
-            length = (int)(sc.ms.Position - startPos - 4);
+
+            // Serialize length (at the start of the binary)
+            var endingPosition = sc.ms.Position;
+            length = (int)(endingPosition - startPos - 4);
+            sc.ms.JumpTo(startPos);
+            sc.Serialize(ref length);
+
+            // Come back to the end to finish serialization
+            sc.ms.JumpTo(endingPosition);
             sc.Serialize(ref int0);
             if (sc.Game is MEGame.LE1 or MEGame.LE2)
             {
                 sc.Serialize(ref EndingInts, SCExt.Serialize);
             }
-            sc.ms.JumpTo(startPos);
-            sc.Serialize(ref length);
 
             if (sc.IsLoading)
             {
@@ -84,7 +91,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             }
         }
 
-        public static FaceFXAsset Create()
+        public static FaceFXAsset Create(MEGame game)
         {
             return new()
             {
@@ -96,7 +103,13 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
                 Lines = new List<FaceFXLine>(),
                 TableD = new List<FXATableDElement>(),
                 LipSyncPhonemeNames = new List<int>(),
-                EndingInts = new List<int>()
+                EndingInts = new List<int>(),
+                Version = game switch
+                {
+                    MEGame.ME1 => 1710,
+                    MEGame.ME2 => 1610,
+                    _ => 1731
+                }
             };
         }
 
@@ -154,7 +167,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
 
     public class FaceFXBoneNodeChild
     {
-        public int LinkName;
+        public int CombinerIndex; // Index into combiner node table - I think?
         public int ParentName;
         public float[] unkFloats = new float[10];
     }
@@ -298,7 +311,7 @@ namespace LegendaryExplorerCore.Unreal.BinaryConverters
             {
                 node = new FaceFXBoneNodeChild();
             }
-            sc.Serialize(ref node.LinkName);
+            sc.Serialize(ref node.CombinerIndex);
             sc.Serialize(ref node.ParentName);
 
             for (int i = 0; i < node.unkFloats.Length; i++)

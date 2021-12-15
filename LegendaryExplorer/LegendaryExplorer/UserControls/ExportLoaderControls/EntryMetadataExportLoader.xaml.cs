@@ -9,10 +9,12 @@ using Be.Windows.Forms;
 using LegendaryExplorer.Dialogs;
 using LegendaryExplorer.Misc;
 using LegendaryExplorer.SharedUI;
+using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorerCore.Gammtek.IO;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Misc;
 using LegendaryExplorerCore.Packages;
+using LegendaryExplorerCore.Packages.CloningImportingAndRelinking;
 using LegendaryExplorerCore.Unreal;
 using Xceed.Wpf.Toolkit.Primitives;
 using static LegendaryExplorerCore.Unreal.UnrealFlags;
@@ -123,7 +125,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             var m = new MemoryStream();
             for (int i = 0; i < headerByteProvider.Length; i++)
                 m.WriteByte(headerByteProvider.ReadByte(i));
-            CurrentLoadedEntry.Header = m.ToArray();
+            CurrentLoadedEntry.SetHeaderValuesFromByteArray(m.ToArray());
             switch (CurrentLoadedEntry)
             {
                 case ExportEntry exportEntry:
@@ -176,6 +178,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         public override void LoadExport(ExportEntry exportEntry)
         {
             loadingNewData = true;
+            byte[] header = exportEntry.GenerateHeader();
             try
             {
                 Row_Archetype.Height = new GridLength(24);
@@ -199,7 +202,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
 
                 LoadAllEntriesBindedItems(exportEntry);
 
-                InfoTab_Headersize_TextBox.Text = $"{exportEntry.Header.Length} bytes";
+                InfoTab_Headersize_TextBox.Text = $"{header.Length} bytes";
                 InfoTab_ObjectnameIndex_TextBox.Text = exportEntry.indexValue.ToString();
 
                 var flagsList = Enums.GetValues<EObjectFlags>().Distinct().ToList();
@@ -231,30 +234,30 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                 {
                     Header_Hexbox_ComponentsLabel.Text = "";
                 }
-
-                InfoTab_ExportFlags_TextBlock.Text = $"0x{exportEntry.ExportFlagsOffset:X2} ExportFlags:";
+                int exportFlagsOffset = exportEntry.HasComponentMap ? 44 + EndianReader.ToInt32(header, 40, exportEntry.FileRef.Endian) * 12 : 40;
+                InfoTab_ExportFlags_TextBlock.Text = $"0x{exportFlagsOffset:X2} ExportFlags:";
                 InfoTab_ExportFlags_TextBox.Text = Enums.GetValues<EExportFlags>().Distinct().ToList()
                     .Where(flag => exportEntry.ExportFlags.HasFlag(flag)).StringJoin(" ");
 
                 InfoTab_GenerationNetObjectCount_TextBlock.Text =
-                    $"0x{exportEntry.ExportFlagsOffset + 4:X2} GenerationNetObjs:";
+                    $"0x{exportFlagsOffset + 4:X2} GenerationNetObjs:";
                 int[] generationNetObjectCount = exportEntry.GenerationNetObjectCount;
                 InfoTab_GenerationNetObjectCount_TextBox.Text =
                     $"{generationNetObjectCount.Length} counts: {string.Join(", ", generationNetObjectCount)}";
 
-                InfoTab_GUID_TextBlock.Text = $"0x{exportEntry.PackageGuidOffset:X2} GUID:";
+                int packageGuidOffset = exportFlagsOffset + 8 + EndianReader.ToInt32(header.AsSpan(exportFlagsOffset + 4), exportEntry.FileRef.Endian) * 4;
+                InfoTab_GUID_TextBlock.Text = $"0x{packageGuidOffset:X2} GUID:";
                 InfoTab_ExportGUID_TextBox.Text = exportEntry.PackageGUID.ToString();
-                if (exportEntry.FileRef.Platform == MEPackage.GamePlatform.PC)
-                {
-
-                    InfoTab_PackageFlags_TextBlock.Text = $"0x{exportEntry.PackageGuidOffset + 16:X2} PackageFlags:";
-                    InfoTab_PackageFlags_TextBox.Text = Enums.GetValues<EPackageFlags>().Distinct().ToList()
-                        .Where(flag => exportEntry.PackageFlags.HasFlag(flag)).StringJoin(" ");
-                }
-                else
+                if (exportEntry.FileRef.Platform is MEPackage.GamePlatform.Xenon && exportEntry.FileRef.Game is MEGame.ME1)
                 {
                     InfoTab_PackageFlags_TextBlock.Text = "";
                     InfoTab_PackageFlags_TextBox.Text = "";
+                }
+                else
+                {
+                    InfoTab_PackageFlags_TextBlock.Text = $"0x{packageGuidOffset + 16:X2} PackageFlags:";
+                    InfoTab_PackageFlags_TextBox.Text = Enums.GetValues<EPackageFlags>().Distinct().ToList()
+                        .Where(flag => exportEntry.PackageFlags.HasFlag(flag)).StringJoin(" ");
                 }
             }
             catch (Exception e)
@@ -263,8 +266,8 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             }
 
             CurrentLoadedEntry = exportEntry;
-            OriginalHeader = CurrentLoadedEntry.Header;
-            headerByteProvider.ReplaceBytes(CurrentLoadedEntry.Header);
+            OriginalHeader = header;
+            headerByteProvider.ReplaceBytes(header);
             HexChanged = false;
             Header_Hexbox.Refresh();
             OnPropertyChanged(nameof(ObjectIndexOffsetText));
@@ -331,7 +334,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         public void LoadImport(ImportEntry importEntry)
         {
             loadingNewData = true;
-            InfoTab_Headersize_TextBox.Text = $"{importEntry.Header.Length} bytes";
+            InfoTab_Headersize_TextBox.Text = $"{ImportEntry.HeaderLength} bytes";
             Row_Archetype.Height = new GridLength(0);
             Row_ExpClass.Height = new GridLength(0);
             Row_ImpClass.Height = new GridLength(24);
@@ -356,8 +359,8 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             InfoTab_PackageFile_ComboBox.SelectedIndex = importEntry.FileRef.findName(importEntry.PackageFile);
             InfoTab_ObjectnameIndex_TextBox.Text = importEntry.indexValue.ToString();
             CurrentLoadedEntry = importEntry;
-            OriginalHeader = CurrentLoadedEntry.Header;
-            headerByteProvider.ReplaceBytes(CurrentLoadedEntry.Header);
+            OriginalHeader = CurrentLoadedEntry.GenerateHeader();
+            headerByteProvider.ReplaceBytes(OriginalHeader);
             Header_Hexbox.Refresh();
             HexChanged = false;
             OnPropertyChanged(nameof(ObjectIndexOffsetText));
@@ -689,7 +692,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                 Header_Hexbox = (HexBox)Header_Hexbox_Host.Child;
                 headerByteProvider = new ReadOptimizedByteProvider();
                 Header_Hexbox.ByteProvider = headerByteProvider;
-                if (CurrentLoadedEntry != null) headerByteProvider.ReplaceBytes(CurrentLoadedEntry.Header);
+                if (CurrentLoadedEntry != null) headerByteProvider.ReplaceBytes(CurrentLoadedEntry.GenerateHeader());
                 headerByteProvider.Changed += InfoTab_Header_ByteProvider_InternalChanged;
                 ControlLoaded = true;
 
@@ -778,6 +781,70 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             public override string ToString() => "0: Class";
 
             public int UIndex => 0;
+        }
+
+        private byte[] GetHeaderBytes()
+        {
+            MemoryStream m = new MemoryStream();
+            for (int i = 0; i < headerByteProvider.Length; i++)
+                m.WriteByte(headerByteProvider.ReadByte(i));
+            return m.ToArray();
+        }
+
+        private void GoToExportClass_Clicked(object sender, MouseButtonEventArgs e)
+        {
+            var header = GetHeaderBytes();
+            if (header.Length >= HEADER_OFFSET_EXP_IDXCLASS + 4)
+            {
+                var uindex = EndianReader.ToInt32(header, HEADER_OFFSET_EXP_IDXCLASS, CurrentLoadedEntry.FileRef.Endian);
+                GoToEntryUIndex(uindex);
+            }
+        }
+
+        private void GoToSuperclass_Clicked(object sender, MouseButtonEventArgs e)
+        {
+            var header = GetHeaderBytes();
+            if (header.Length >= HEADER_OFFSET_EXP_IDXCLASS + 4)
+            {
+                var uindex = EndianReader.ToInt32(header, HEADER_OFFSET_EXP_IDXSUPERCLASS, CurrentLoadedEntry.FileRef.Endian);
+                GoToEntryUIndex(uindex);
+            }
+        }
+
+        private void GoToArchetype_Clicked(object sender, MouseButtonEventArgs e)
+        {
+            var header = GetHeaderBytes();
+            if (header.Length >= HEADER_OFFSET_EXP_IDXCLASS + 4)
+            {
+                var uindex = EndianReader.ToInt32(header, HEADER_OFFSET_EXP_IDXARCHETYPE, CurrentLoadedEntry.FileRef.Endian);
+                GoToEntryUIndex(uindex);
+            }
+        }
+
+        private void GoToEntryUIndex(int UIndex)
+        {
+            if (CurrentLoadedEntry.FileRef.TryGetEntry(UIndex, out var entry))
+            {
+                if (entry is ExportEntry exp)
+                {
+                    Window w = Window.GetWindow(this);
+                    if (w is PackageEditorWindow pe)
+                    {
+                        pe.GoToNumber(exp.UIndex);
+                    }
+                }
+                else if (entry is ImportEntry imp)
+                {
+                    var resolved = EntryImporter.ResolveImport(imp);
+                    if (resolved != null)
+                    {
+                        var p = new PackageEditorWindow();
+                        p.Show();
+                        p.LoadFile(resolved.FileRef.FilePath, resolved.UIndex);
+                        p.Activate(); //bring to front
+                    }
+                }
+            }
         }
     }
 }

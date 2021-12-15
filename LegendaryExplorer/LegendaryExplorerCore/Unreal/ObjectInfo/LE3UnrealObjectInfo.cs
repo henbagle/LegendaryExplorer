@@ -272,116 +272,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
             return null;
         }
 
-        static readonly ConcurrentDictionary<string, PropertyCollection> defaultStructValuesLE3 = new();
-        public static PropertyCollection getDefaultStructValue(string structName, bool stripTransients, PackageCache packageCache)
-        {
-            if (stripTransients && defaultStructValuesLE3.TryGetValue(structName, out var cachedProps))
-            {
-                return cachedProps;
-            }
-            bool isImmutable = IsImmutableStruct(structName);
-            if (Structs.TryGetValue(structName, out ClassInfo info))
-            {
-                try
-                {
-                    PropertyCollection props = new();
-                    while (info != null)
-                    {
-                        foreach ((NameReference propName, PropertyInfo propInfo) in info.properties)
-                        {
-                            if (stripTransients && propInfo.Transient)
-                            {
-                                continue;
-                            }
-
-                            if (getDefaultProperty(propName, propInfo, packageCache, stripTransients, isImmutable) is Property uProp)
-                            {
-                                props.Add(uProp);
-                                if (propInfo.IsStaticArray())
-                                {
-                                    for (int i = 1; i < propInfo.StaticArrayLength; i++)
-                                    {
-                                        uProp = getDefaultProperty(propName, propInfo, packageCache, stripTransients, isImmutable);
-                                        uProp.StaticArrayIndex = i;
-                                        props.Add(uProp);
-                                    }
-                                }
-                            }
-                        }
-                        string filepath = null;
-                        if (LE3Directory.GetBioGamePath() != null)
-                        {
-                            filepath = Path.Combine(LE3Directory.GetBioGamePath(), info.pccPath);
-                        }
-
-                        Stream loadStream = null;
-                        IMEPackage cachedPackage = null;
-                        if (packageCache != null)
-                        {
-                            packageCache.TryGetCachedPackage(filepath, true, out cachedPackage);
-                            if (cachedPackage == null)
-                                packageCache.TryGetCachedPackage(info.pccPath, true, out cachedPackage); // some cache types may have different behavior (such as relative package cache)
-
-                            if (cachedPackage != null)
-                            {
-                                // Use this one
-                                readDefaultProps(cachedPackage, props, packageCache: packageCache);
-                            }
-                        }
-                        else if (filepath != null && MEPackageHandler.TryGetPackageFromCache(filepath, out cachedPackage))
-                        {
-                            readDefaultProps(cachedPackage, props, packageCache: packageCache);
-                        }
-                        else if (File.Exists(info.pccPath))
-                        {
-                            filepath = info.pccPath;
-                            loadStream = MEPackageHandler.ReadAllFileBytesIntoMemoryStream(info.pccPath);
-                        }
-                        else if (info.pccPath == GlobalUnrealObjectInfo.Me3ExplorerCustomNativeAdditionsName)
-                        {
-                            filepath = "GAMERESOURCES_LE3";
-                            loadStream = LegendaryExplorerCoreUtilities.LoadFileFromCompressedResource("GameResources.zip", LegendaryExplorerCoreLib.CustomResourceFileName(MEGame.LE3));
-                        }
-                        else if (filepath != null && File.Exists(filepath))
-                        {
-                            loadStream = MEPackageHandler.ReadAllFileBytesIntoMemoryStream(filepath);
-                        }
-
-                        if (cachedPackage == null && loadStream != null)
-                        {
-                            using IMEPackage importPCC = MEPackageHandler.OpenMEPackageFromStream(loadStream, filepath, useSharedPackageCache: true);
-                            readDefaultProps(importPCC, props, packageCache);
-                        }
-
-                        Structs.TryGetValue(info.baseClass, out info);
-                    }
-                    props.Add(new NoneProperty());
-
-                    if (stripTransients)
-                    {
-                        defaultStructValuesLE3.TryAdd(structName, props);
-                    }
-                    return props;
-                }
-                catch (Exception e)
-                {
-                    LECLog.Warning($@"Exception getting default LE3 struct property for {structName}: {e.Message}");
-                    return null;
-                }
-            }
-            return null;
-
-            void readDefaultProps(IMEPackage impPackage, PropertyCollection defaultProps, PackageCache packageCache)
-            {
-                var exportToRead = impPackage.GetUExport(info.exportIndex);
-                byte[] buff = exportToRead.DataReadOnly.Slice(0x24).ToArray();
-                PropertyCollection defaults = PropertyCollection.ReadProps(exportToRead, new MemoryStream(buff), structName, packageCache: packageCache);
-                foreach (var prop in defaults)
-                {
-                    defaultProps.TryReplaceProp(prop);
-                }
-            }
-        }
+        internal static readonly ConcurrentDictionary<string, PropertyCollection> defaultStructValuesLE3 = new();
 
         public static Property getDefaultProperty(NameReference propName, PropertyInfo propInfo, PackageCache packageCache, bool stripTransients = true, bool isImmutable = false)
         {
@@ -435,46 +326,12 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                     }
                 case PropertyType.StructProperty:
                     isImmutable = isImmutable || GlobalUnrealObjectInfo.IsImmutable(propInfo.Reference, MEGame.LE3);
-                    return new StructProperty(propInfo.Reference, getDefaultStructValue(propInfo.Reference, stripTransients, packageCache), propName, isImmutable);
+                    return new StructProperty(propInfo.Reference, GlobalUnrealObjectInfo.getDefaultStructValue(MEGame.LE3, propInfo.Reference, stripTransients, packageCache), propName, isImmutable);
                 case PropertyType.None:
                 case PropertyType.Unknown:
                 default:
                     return null;
             }
-        }
-
-        public static bool InheritsFrom(string className, string baseClass, Dictionary<string, ClassInfo> customClassInfos = null, string knownSuperclass = null)
-        {
-            if (baseClass == @"Object") return true; //Everything inherits from Object
-            if (knownSuperclass != null && baseClass == knownSuperclass) return true; // We already know it's a direct descendant
-            while (true)
-            {
-                if (className == baseClass)
-                {
-                    return true;
-                }
-
-                if (customClassInfos != null && customClassInfos.ContainsKey(className))
-                {
-                    className = customClassInfos[className].baseClass;
-                }
-                else if (Classes.ContainsKey(className))
-                {
-                    className = Classes[className].baseClass;
-                }
-                else if (knownSuperclass != null && Classes.ContainsKey(knownSuperclass))
-                {
-                    // We don't have this class in DB but we have super class (e.g. this is custom class without custom class info generated).
-                    // We will just ignore this class and jump to our known super class
-                    className = Classes[knownSuperclass].baseClass;
-                    knownSuperclass = null; // Don't use it again
-                }
-                else
-                {
-                    break;
-                }
-            }
-            return false;
         }
 
         #region Generating
@@ -719,6 +576,24 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                 ObjInstanceVersion = 1
             };
 
+            //Kinkojiro - New Class - this sets the tlk strings for a GAW category in war assets gui
+            classes["SFXSeqAct_SetGAWCategoryTitles"] = new ClassInfo
+            {
+                baseClass = "SequenceAction",
+                pccPath = GlobalUnrealObjectInfo.Me3ExplorerCustomNativeAdditionsName,
+                exportIndex = 108, //in LE3Resources.pcc
+                properties =
+                {
+                    new KeyValuePair<NameReference, PropertyInfo>("CategoryId", new PropertyInfo(PropertyType.IntProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("NewTitleRef", new PropertyInfo(PropertyType.StringRefProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("NewDescriptionRef", new PropertyInfo(PropertyType.StringRefProperty))
+                }
+            };
+            sequenceObjects["SFXSeqAct_SetGAWCategoryTitles"] = new SequenceObjectInfo
+            {
+                ObjInstanceVersion = 1
+            };
+
             //Kinkojiro - New Class - only used in EGM
             classes["SFXSeqAct_TerminalGUI_EGM"] = new ClassInfo
             {
@@ -789,6 +664,73 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
             sequenceObjects["SFXSeqAct_SetReaperAggression"] = new SequenceObjectInfo
             {
                 ObjInstanceVersion = 1
+            };
+
+            //Kinkojiro - New GM Classes - only used in EGM
+            classes["SFXClusterEGM"] = new ClassInfo
+            {
+                baseClass = "SFXCluster",
+                properties =
+                {
+                    new KeyValuePair<NameReference, PropertyInfo>("DisplayGAWCondition", new PropertyInfo(PropertyType.IntProperty))
+                }
+            };
+            classes["SFXSystemEGM"] = new ClassInfo
+            {
+                baseClass = "SFXSystem",
+                properties =
+                {
+                    new KeyValuePair<NameReference, PropertyInfo>("m_bCerberusSystem", new PropertyInfo(PropertyType.BoolProperty))
+                }
+            };
+            classes["SFXPlanet_Invaded"] = new ClassInfo
+            {
+                baseClass = "BioPlanet",
+                properties =
+                {
+                    new KeyValuePair<NameReference, PropertyInfo>("InvasionCondition", new PropertyInfo(PropertyType.IntProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("PreInvasionDescription", new PropertyInfo(PropertyType.StringRefProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("m_bDestroyedbyReapers", new PropertyInfo(PropertyType.BoolProperty))
+                }
+            };
+            classes["SFXGalaxyMapShipAppearance"] = new ClassInfo
+            {
+                baseClass = "SFXGalaxyMapPlanetAppearance",
+                properties =
+                {
+                    new KeyValuePair<NameReference, PropertyInfo>("AmbientColor", new PropertyInfo(PropertyType.StructProperty, "LinearColor")),
+                    new KeyValuePair<NameReference, PropertyInfo>("m_bNeedsLightEnvironment", new PropertyInfo(PropertyType.BoolProperty))
+                }
+            };
+            classes["SFXGalaxyMapFuelDepotDestroyable"] = new ClassInfo
+            {
+                baseClass = "SFXGalaxyMapDestroyedFuelDepot",
+                properties =
+                {
+                    new KeyValuePair<NameReference, PropertyInfo>("DestructionCondition", new PropertyInfo(PropertyType.IntProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("EmptyAppearance", new PropertyInfo(PropertyType.ObjectProperty, "SFXGalaxyMapObjectAppearanceBase")),
+                    new KeyValuePair<NameReference, PropertyInfo>("EmptyDisplayName", new PropertyInfo(PropertyType.StringRefProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("EmptyDescription", new PropertyInfo(PropertyType.StringRefProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("EmptyTexture", new PropertyInfo(PropertyType.ObjectProperty, "Texture2D")),
+                    new KeyValuePair<NameReference, PropertyInfo>("m_bEmptyDepot", new PropertyInfo(PropertyType.BoolProperty))
+                }
+            };
+            classes["SFXGalaxyMapReaperEGM"] = new ClassInfo
+            {
+                baseClass = "SFXGalaxyMapReaper",
+                properties =
+                {
+                    new KeyValuePair<NameReference, PropertyInfo>("EGMSettingCondition", new PropertyInfo(PropertyType.IntProperty))
+                }
+            };
+            classes["SFXGalaxyMapCerberusShip"] = new ClassInfo
+            {
+                baseClass = "SFXGalaxyMapReaperEGM",
+                properties =
+                {
+                    
+                   new KeyValuePair<NameReference, PropertyInfo>("ArrowMaterialInstance", new PropertyInfo(PropertyType.ObjectProperty, "MaterialInstanceConstant"))
+                }
             };
 
             ME3UnrealObjectInfo.AddIntrinsicClasses(classes, MEGame.LE3);
