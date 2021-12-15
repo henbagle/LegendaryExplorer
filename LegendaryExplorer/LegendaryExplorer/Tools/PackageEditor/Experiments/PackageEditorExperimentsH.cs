@@ -631,5 +631,144 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 newDecalComponent.WritePropertiesAndBinary(props, binary);
             }
         }
+
+        public static void MakoBanter(PackageEditorWindow pew)
+        {
+            var pcc = pew.Pcc;
+            var cache = new PackageCache();
+            var banterRootSeq = pcc?.FindExport("TheWorld.PersistentLevel.Main_Sequence.RunCompanionBanter");
+            if (pcc is null || banterRootSeq is null) return;
+
+            foreach (var banterSequenceEntry in banterRootSeq.GetAllDescendants().Where(i =>
+                         i is ExportEntry {ClassName: "Sequence"} exp && exp.ObjectNameString.StartsWith("Play_")))
+            {
+                var banterSequence = banterSequenceEntry as ExportEntry;
+                var makoObject = SequenceObjectCreator.CreateSequenceObject(pcc, "BioSeqVar_ObjectFindByTag");
+                var ownerHench = GetHenchFromSeqName(banterSequence.ObjectName);
+                var sequenceObjects = KismetHelper.GetSequenceObjects(banterSequence).OfType<ExportEntry>().ToList();
+                if(string.IsNullOrEmpty(ownerHench)) continue;
+
+                makoObject.WriteProperty(new StrProperty("UNC_DefaultRover", "m_sObjectTagToFind"));
+                KismetHelper.AddObjectToSequence(makoObject, banterSequence);
+
+
+                foreach (var fovo in banterSequence.GetChildren<ExportEntry>()
+                             .Where(e => e.ClassName == "BioSeqAct_FaceOnlyVO"))
+                {
+                    var fovoProps = fovo.GetProperties();
+                    var henchTag = fovoProps.GetProp<NameProperty>("m_nmSpeakerTag").Value.Name;
+
+                    // Add actor name override
+                    fovoProps.AddOrReplaceProp(new StringRefProperty(GetHenchStrRef(henchTag), "m_srActorNameOverride"));
+
+                    // Create pawn variable link, link to Mako
+                    var seqVarLink = new PropertyCollection()
+                    {
+                        new ArrayProperty<ObjectProperty>("LinkedVariables")
+                        {
+                            new ObjectProperty(makoObject)
+                        },
+                        new StrProperty("Pawn", "LinkDesc"),
+                        new ObjectProperty(pcc.FindImport("Engine.SeqVar_Object"), "ExpectedType"),
+                        new NameProperty("None", "LinkVar"),
+                        new NameProperty("Targets", "PropertyName"),
+                        new IntProperty(1, "MinVars"),
+                        new IntProperty(1, "MaxVars"),
+                        new BoolProperty(false, "bWriteable"),
+                        new BoolProperty(false, "bModifiesLinkedObject"),
+                        new BoolProperty(false, "bAllowAnyType")
+                    };
+                    fovoProps.AddOrReplaceProp(new ArrayProperty<StructProperty>("VariableLinks") { new StructProperty("SeqVarLink", seqVarLink)});
+                    fovo.WriteProperties(fovoProps);
+
+                    // If this FOVO belongs to a hench who doesn't own the dialogue, create a PM_CheckState to make sure
+                    // they are in the party first. The outer sequence already checks if the owner is in the party before running the sequence.
+                    if (henchTag != ownerHench)
+                    {
+                        var newCond = MakeHenchInPartyCheckState(fovo, banterSequence, sequenceObjects, henchTag);
+                    }
+                }
+
+                // FOVOs will still have "Failed" out links to use the conversation in squad system.
+                // Change all the "Failed" out links to their respective CheckState False links, where applicable
+                foreach (var checkState in banterSequence.GetChildren<ExportEntry>()
+                             .Where(e => e.ClassName == "BioSeqAct_PMCheckState"))
+                {
+                    var stateLinks = SeqTools.GetOutboundLinksOfNode(checkState);
+                    var fovo = stateLinks[0][0].LinkedOp as ExportEntry;
+                    if (fovo is null) return;
+                    var fovoLinks = SeqTools.GetOutboundLinksOfNode(fovo);
+                    if (fovoLinks.Count >= 2)
+                    {
+                        foreach (var fail in fovoLinks[1])
+                        {
+                            if (fail.LinkedOp is ExportEntry failExp)
+                            {
+                                KismetHelper.CreateOutputLink(checkState, "False", failExp);
+                            }
+                        }
+                        fovoLinks[1].Clear();
+                    }
+                    SeqTools.WriteOutboundLinksToNode(fovo, fovoLinks);
+                }
+            }
+
+            ExportEntry MakeHenchInPartyCheckState(ExportEntry fovo, ExportEntry sequence, IEnumerable<ExportEntry> elements, string henchTag)
+            {
+                var inLinks = SeqTools.FindOutboundConnectionsToNode(fovo, elements);
+                var newCheck = SequenceObjectCreator.CreateSequenceObject(fovo.FileRef, "BioSeqAct_PMCheckState", cache);
+                KismetHelper.AddObjectToSequence(newCheck, sequence);
+                KismetHelper.CreateOutputLink(newCheck, "True", fovo);
+                KismetHelper.SetComment(newCheck, $"{henchTag} in party?");
+                newCheck.WriteProperty(new IntProperty(GetHenchBool(henchTag), "m_nIndex"));
+                foreach (var inLink in inLinks)
+                {
+                    var toLinks = SeqTools.GetOutboundLinksOfNode(inLink);
+                    foreach (var port in toLinks)
+                    {
+                        foreach (var link in port)
+                        {
+                            if (link.LinkedOp.UIndex == fovo.UIndex)
+                            {
+                                link.LinkedOp = newCheck;
+                            }
+                        }
+                    }
+                    SeqTools.WriteOutboundLinksToNode(inLink, toLinks);
+                }
+                return newCheck;
+            }
+
+            string GetHenchFromSeqName(string seqName)
+            {
+                if (seqName.Contains("Kaidan")) return "hench_humanmale";
+                else if (seqName.Contains("Ashley")) return "hench_humanfemale";
+                else if (seqName.Contains("Garrus")) return "hench_turian";
+                else if (seqName.Contains("Wrex")) return "hench_krogan";
+                else if (seqName.Contains("Tali")) return "hench_quarian";
+                else if (seqName.Contains("Liara")) return "hench_asari";
+                else return null;
+            }
+
+            int GetHenchBool(string tag) => tag switch
+            {
+                "hench_humanmale" => 3817,
+                "hench_humanfemale" => 3818,
+                "hench_turian" => 3819,
+                "hench_krogan" => 3820,
+                "hench_asari" => 3821,
+                "hench_quarian" => 3822
+            };
+
+            int GetHenchStrRef(string tag) => tag switch
+            {
+                "hench_humanmale" => 164532,
+                "hench_humanfemale" => 164530,
+                "hench_turian" => 165839,
+                "hench_krogan" => 164529,
+                "hench_asari" => 149285,
+                "hench_quarian" => 164533
+            };
+        }
     }
 }

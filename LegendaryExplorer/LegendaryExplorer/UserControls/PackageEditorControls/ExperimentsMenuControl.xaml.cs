@@ -1281,6 +1281,10 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
             PackageEditorExperimentsH.CopyDecalActors(GetPEWindow());
         }
 
+        private void MakoBanter_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.MakoBanter(GetPEWindow());
+        }
         #endregion
 
         // EXPERIMENTS: OTHER PEOPLE ------------------------------------------------------------
@@ -1329,5 +1333,6 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         }
 
         // PLEASE MOVE YOUR EXPERIMENT HANDLER INTO YOUR SECTION ABOVE
+
     }
 }
