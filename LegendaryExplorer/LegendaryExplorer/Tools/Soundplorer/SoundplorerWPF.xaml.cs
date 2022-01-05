@@ -36,7 +36,7 @@ namespace LegendaryExplorer.Tools.Soundplorer
     /// <summary>
     /// Interaction logic for SoundplorerWPF.xaml
     /// </summary>
-    public partial class SoundplorerWPF : WPFBase, IBusyUIHost, IRecents
+    public partial class SoundplorerWPF : WPFBase, IBusyUIHost, IRecents, IFileLoaderTool
     {
         private string LoadedISBFile;
         private string LoadedAFCFile;
@@ -154,6 +154,12 @@ namespace LegendaryExplorer.Tools.Soundplorer
             {
                 MessageBox.Show("Error:\n" + ex.Message);
             }
+        }
+
+        public void LoadFile(string filePath, int uIndex)
+        {
+            //TODO: Hook up UIndex selection for MEPackage files
+            LoadFile(filePath);
         }
 
         private async void LoadAFC()

@@ -50,7 +50,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
     /// <summary>
     /// Interaction logic for SequenceEditorWPF.xaml
     /// </summary>
-    public partial class SequenceEditorWPF : WPFBase, IRecents
+    public partial class SequenceEditorWPF : WPFBase, IRecents, IFileLoaderTool
     {
         private readonly GraphEditor graphEditor;
         public ObservableCollectionExtended<SObj> CurrentObjects { get; } = new();

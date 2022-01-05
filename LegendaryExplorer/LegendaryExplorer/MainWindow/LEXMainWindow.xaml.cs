@@ -1,22 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using LegendaryExplorer.SharedUI.Bases;
-using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorer.UnrealExtensions;
 using LegendaryExplorer.Misc;
 using LegendaryExplorer.Misc.AppSettings;
@@ -176,7 +165,7 @@ namespace LegendaryExplorer.MainWindow
 
         private void SetToolListFromFavorites()
         {
-            var favorites = ToolSet.Items.Where(tool => tool.IsFavorited);
+            var favorites = ToolSet.Items.Where(tool => tool.IsFavorited).ToList();
             SetToolList(favorites);
             if (!favorites.Any())
             {

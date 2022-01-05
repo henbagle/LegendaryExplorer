@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.CommandLine;
 using System.CommandLine.Invocation;
-using System.Text;
-using System.Threading.Tasks;
 using LegendaryExplorer.DialogueEditor;
 using LegendaryExplorer.SharedUI.Bases;
+using LegendaryExplorer.Tools;
 using LegendaryExplorer.Tools.AssetDatabase;
 using LegendaryExplorer.Tools.ConditionalsEditor;
 using LegendaryExplorer.Tools.FaceFXEditor;
@@ -18,7 +15,6 @@ using LegendaryExplorer.Tools.PathfindingEditor;
 using LegendaryExplorer.Tools.Sequence_Editor;
 using LegendaryExplorer.Tools.Soundplorer;
 using LegendaryExplorer.UserControls.ExportLoaderControls;
-using LegendaryExplorerCore.Helpers;
 
 namespace LegendaryExplorer.Startup
 {
@@ -40,7 +36,7 @@ namespace LegendaryExplorer.Startup
         }
 
         // Method parameters MUST match option names in the RootCommand
-        private static void HandleCLIArgs(FileInfo open, string tool, int UIndex)
+        private static void HandleCLIArgs(FileInfo open, string tool, int uIndex)
         {
             var file = open;
 
@@ -50,14 +46,14 @@ namespace LegendaryExplorer.Startup
                 switch(tool)
                 {
                     case "SequenceEditor":
-                        OpenTool<SequenceEditorWPF>((s) => s.LoadFile(file.FullName));
+                        ToolOpener.OpenInTool<SequenceEditorWPF>(file.FullName);
                         break;
                     case "DialogueEditor":
-                        OpenTool<DialogueEditorWindow>((s) => s.LoadFile(file.FullName));
+                        ToolOpener.OpenInTool<DialogueEditorWindow>(file.FullName);
                         break;
                     case "SoundExplorer":
                     case "Soundplorer":
-                        OpenTool<SoundplorerWPF>(s => s.LoadFile(file.FullName));
+                        ToolOpener.OpenInTool<SoundplorerWPF>(file.FullName);
                         break;
                     default:
                         switch(file.Extension.ToLower())
@@ -67,7 +63,7 @@ namespace LegendaryExplorer.Startup
                             case ".upk":
                             case ".u":
                             case ".udk":
-                                OpenTool<PackageEditorWindow>((p) => p.LoadFile(file.FullName, UIndex));
+                                OpenTool<PackageEditorWindow>((p) => p.LoadFile(file.FullName, uIndex));
                                 break;
                             case ".tlk":
                                 var elhw = new ExportLoaderHostedWindow(new TLKEditorExportLoader(), file.FullName)
@@ -83,12 +79,10 @@ namespace LegendaryExplorer.Startup
                                 break;
                             case ".isb":
                             case ".afc":
-                                OpenTool<SoundplorerWPF>(s => s.LoadFile(file.FullName));
+                                ToolOpener.OpenInTool<SoundplorerWPF>(file.FullName);
                                 break;
                             case ".cnd":
-                                var ce = new ConditionalsEditorWindow();
-                                ce.Show();
-                                ce.LoadFile(file.FullName);
+                                ToolOpener.OpenInTool<ConditionalsEditorWindow>(file.FullName);
                                 break;
 
                         }
@@ -104,28 +98,28 @@ namespace LegendaryExplorer.Startup
                 switch (tool)
                 {
                     case "PackageEditor":
-                        OpenTool<PackageEditorWindow>();
+                        ToolOpener.OpenTool<PackageEditorWindow>();
                         break;
                     case "SequenceEditor":
-                        OpenTool<SequenceEditorWPF>();
+                        ToolOpener.OpenTool<SequenceEditorWPF>();
                         break;
                     case "Soundplorer":
-                        OpenTool<SoundplorerWPF>();
+                        ToolOpener.OpenTool<SoundplorerWPF>();
                         break;
                     case "DialogueEditor":
-                        OpenTool<DialogueEditorWindow>();
+                        ToolOpener.OpenTool<DialogueEditorWindow>();
                         break;
                     case "PathfindingEditor":
-                        OpenTool<PathfindingEditorWindow>();
+                        ToolOpener.OpenTool<PathfindingEditorWindow>();
                         break;
                     case "Meshplorer":
-                        OpenTool<MeshplorerWindow>();
+                        ToolOpener.OpenTool<MeshplorerWindow>();
                         break;
                     case "FaceFXEditor":
-                        OpenTool<FaceFXEditorWindow>();
+                        ToolOpener.OpenTool<FaceFXEditorWindow>();
                         break;
                     case "AssetDB":
-                        (new AssetDatabaseWindow()).Show();
+                        ToolOpener.OpenTool<AssetDatabaseWindow>();
                         break;
                 }
             }

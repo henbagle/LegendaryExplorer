@@ -34,7 +34,7 @@ namespace LegendaryExplorer.Tools.Meshplorer
     /// <summary>
     /// Interaction logic for MeshplorerWindow.xaml
     /// </summary>
-    public partial class MeshplorerWindow : WPFBase, IRecents
+    public partial class MeshplorerWindow : WPFBase, IRecents, IFileLoaderTool
     {
         private bool _isRendererBusy;
         public bool IsRendererBusy
@@ -528,37 +528,42 @@ namespace LegendaryExplorer.Tools.Meshplorer
             }
         }
 
-        public void LoadFile(string s, int goToIndex = 0)
+        public void LoadFile(string filePath)
         {
             try
             {
                 //BusyText = "Loading " + Path.GetFileName(s);
                 //IsBusy = true;
                 StatusBar_LeftMostText.Text =
-                    $"Loading {Path.GetFileName(s)} ({FileSize.FormatSize(new FileInfo(s).Length)})";
+                    $"Loading {Path.GetFileName(filePath)} ({FileSize.FormatSize(new FileInfo(filePath).Length)})";
                 Dispatcher.Invoke(new Action(() => { }), DispatcherPriority.ContextIdle, null);
-                LoadMEPackage(s);
+                LoadMEPackage(filePath);
 
                 MeshExports.ReplaceAll(Pcc.Exports.Where(Mesh3DViewer.CanParse));
 
-                StatusBar_LeftMostText.Text = Path.GetFileName(s);
-                Title = $"Meshplorer - {s}";
+                StatusBar_LeftMostText.Text = Path.GetFileName(filePath);
+                Title = $"Meshplorer - {filePath}";
 
-                RecentsController.AddRecent(s, false, Pcc?.Game);
+                RecentsController.AddRecent(filePath, false, Pcc?.Game);
                 RecentsController.SaveRecentList(true);
-                if (goToIndex != 0)
-                {
-                    CurrentExport = MeshExports.FirstOrDefault(x => x.UIndex == goToIndex);
-                    ExportQueuedForFocusing = CurrentExport;
-                }
             }
             catch (Exception e)
             {
-                StatusBar_LeftMostText.Text = "Failed to load " + Path.GetFileName(s);
-                MessageBox.Show($"Error loading {Path.GetFileName(s)}:\n{e.Message}");
+                StatusBar_LeftMostText.Text = "Failed to load " + Path.GetFileName(filePath);
+                MessageBox.Show($"Error loading {Path.GetFileName(filePath)}:\n{e.Message}");
                 IsBusy = false;
                 IsBusyTaskbar = false;
                 //throw e;
+            }
+        }
+
+        public void LoadFile(string filePath, int uIndex)
+        {
+            LoadFile(filePath);
+            if (uIndex != 0)
+            {
+                CurrentExport = MeshExports.FirstOrDefault(x => x.UIndex == uIndex);
+                ExportQueuedForFocusing = CurrentExport;
             }
         }
 

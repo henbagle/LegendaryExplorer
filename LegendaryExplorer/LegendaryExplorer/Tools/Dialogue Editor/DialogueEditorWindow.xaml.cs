@@ -21,6 +21,7 @@ using LegendaryExplorer.SharedUI;
 using LegendaryExplorer.SharedUI.Bases;
 using LegendaryExplorer.SharedUI.Interfaces;
 using LegendaryExplorer.SharedUI.PeregrineTreeView;
+using LegendaryExplorer.Tools;
 using LegendaryExplorer.Tools.FaceFXEditor;
 using LegendaryExplorer.Tools.InterpEditor;
 using LegendaryExplorer.Tools.PackageEditor;
@@ -51,7 +52,7 @@ namespace LegendaryExplorer.DialogueEditor
     /// <summary>
     /// Interaction logic for DialogueEditorWindow.xaml
     /// </summary>
-    public partial class DialogueEditorWindow : WPFBase, IRecents
+    public partial class DialogueEditorWindow : WPFBase, IRecents, IOtherFileLoaderTool
     {
         #region Declarations
         private struct SaveData
@@ -542,15 +543,6 @@ namespace LegendaryExplorer.DialogueEditor
             return Pcc != null;
         }
 
-        public void LoadFile(string fileName, int uIndex)
-        {
-            LoadFile(fileName);
-            var convo = Conversations.FirstOrDefault(c => c.ExportUID == uIndex);
-            if (convo != null)
-            {
-                Conversations_ListBox.SelectedItem = convo;
-            }
-        }
         public void LoadFile(string fileName)
         {
             try
@@ -606,6 +598,26 @@ namespace LegendaryExplorer.DialogueEditor
                 UnloadFile();
             }
         }
+
+        public void LoadFile(string fileName, int uIndex)
+        {
+            LoadFile(fileName);
+            var convo = Conversations.FirstOrDefault(c => c.ExportUID == uIndex);
+            if (convo != null)
+            {
+                Conversations_ListBox.SelectedItem = convo;
+            }
+        }
+
+        public void LoadFile(string fileName, int uIndex, int strRef)
+        {
+            LoadFile(fileName, uIndex);
+            if (strRef != 0)
+            {
+                TrySelectStrRef(strRef);
+            }
+        }
+
         private void UnloadFile()
         {
 

@@ -19,10 +19,7 @@ namespace LegendaryExplorer.Tools.InterpEditor.InterpExperiments
             var selectedLine = GetConversationFromSelectedTrack(iew);
             if (!selectedLine.HasValue) return;
             var (strRef, conv) = selectedLine.Value;
-            var dlg = new DialogueEditorWindow();
-            dlg.Show();
-            dlg.LoadFile(conv.Export.FileRef.FilePath, conv.Export.UIndex);
-            if(strRef > 0) dlg.TrySelectStrRef(strRef);
+            ToolOpener.OpenInTool<DialogueEditorWindow>(new ToolOpenOptionsPackage(conv.Export) {AdditionalId = strRef});
         }
 
         public static void OpenFovoLineAudio(bool isMale, InterpEditorWindow iew)
@@ -42,22 +39,10 @@ namespace LegendaryExplorer.Tools.InterpEditor.InterpExperiments
             var pcc = node.WwiseStream_Female?.FileRef ?? node.WwiseStream_Male?.FileRef;
             if (pcc is null) return;
 
-            if (pcc.IsUExport(faceFxUindex) && faceFx is not null)
+            var fxe = ToolOpener.OpenInTool<FaceFXEditorWindow>(pcc.FilePath);
+            if (pcc.IsUExport(faceFxUindex))
             {
-                var fxe = new FaceFXEditorWindow();
-                fxe.LoadFile(pcc.FilePath);
-                fxe.Show();
                 fxe.SelectAnimset(faceFxUindex, faceFx);
-            }
-            else if (pcc.IsUExport(faceFxUindex))
-            {
-                new FaceFXEditorWindow(pcc.GetUExport(faceFxUindex)).Show();
-            }
-            else
-            {
-                var facefxEditor = new FaceFXEditorWindow();
-                facefxEditor.LoadFile(pcc.FilePath);
-                facefxEditor.Show();
             }
         }
 

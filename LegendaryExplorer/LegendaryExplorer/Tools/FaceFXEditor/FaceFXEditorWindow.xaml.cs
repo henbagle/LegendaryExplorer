@@ -21,7 +21,7 @@ namespace LegendaryExplorer.Tools.FaceFXEditor
     /// <summary>
     /// Interaction logic for FaceFXEditor.xaml
     /// </summary>
-    public partial class FaceFXEditorWindow : WPFBase, IRecents
+    public partial class FaceFXEditorWindow : WPFBase, IRecents, IFileLoaderTool
     {
 
         public ObservableCollectionExtended<ExportEntry> AnimSets { get; } = new();
@@ -151,6 +151,12 @@ namespace LegendaryExplorer.Tools.FaceFXEditor
                 UnLoadMEPackage();
                 MessageBox.Show($"Error:\n{ex.Message}");
             }
+        }
+
+        public void LoadFile(string fileName, int uIndex)
+        {
+            LoadFile(fileName);
+            SelectAnimset(uIndex);
         }
 
         private void RefreshComboBox()

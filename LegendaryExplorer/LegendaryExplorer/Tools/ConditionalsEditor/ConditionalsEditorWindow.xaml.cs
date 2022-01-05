@@ -31,7 +31,7 @@ namespace LegendaryExplorer.Tools.ConditionalsEditor
     /// <summary>
     /// Interaction logic for ConditionalsEditorWindow.xaml
     /// </summary>
-    public partial class ConditionalsEditorWindow : TrackingNotifyPropertyChangedWindowBase, IRecents
+    public partial class ConditionalsEditorWindow : TrackingNotifyPropertyChangedWindowBase, IRecents, IFileLoaderTool
     {
         #region DependencyProperties
 

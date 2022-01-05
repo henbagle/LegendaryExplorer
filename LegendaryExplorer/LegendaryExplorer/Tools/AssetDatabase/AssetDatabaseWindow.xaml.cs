@@ -985,63 +985,23 @@ namespace LegendaryExplorer.Tools.AssetDatabase
             switch (tool)
             {
                 case "Meshplorer":
-                    var meshPlorer = new Meshplorer.MeshplorerWindow();
-                    meshPlorer.Show();
-                    if (uindex != 0)
-                    {
-                        meshPlorer.LoadFile(filePath, uindex);
-                    }
-                    else
-                    {
-                        meshPlorer.LoadFile(filePath);
-                    }
+                    ToolOpener.OpenInTool<Meshplorer.MeshplorerWindow>(filePath, uindex);
                     break;
                 case "PathEd":
                     var pathEd = new PathfindingEditor.PathfindingEditorWindow(filePath);
                     pathEd.Show();
                     break;
                 case "DlgEd":
-                    var diagEd = new DialogueEditor.DialogueEditorWindow();
-                    diagEd.Show();
-                    if (uindex != 0)
-                    {
-                        diagEd.LoadFile(filePath, uindex);
-                        if (strRef != 0) diagEd.TrySelectStrRef(strRef);
-                    }
-                    else
-                    {
-                        diagEd.LoadFile(filePath);
-                    }
+                    ToolOpener.OpenInTool<DialogueEditor.DialogueEditorWindow>(filePath, uindex, strRef);
                     break;
                 case "SeqEd":
-                    var SeqEd = new Sequence_Editor.SequenceEditorWPF();
-                    SeqEd.Show();
-                    if (uindex != 0)
-                    {
-                        SeqEd.LoadFile(filePath, uindex);
-                    }
-                    else
-                    {
-                        SeqEd.LoadFile(filePath);
-                    }
+                    ToolOpener.OpenInTool<Sequence_Editor.SequenceEditorWPF>(filePath, uindex);
                     break;
                 case "SoundExplorer":
-                    var soundplorer = new Soundplorer.SoundplorerWPF();
-                    soundplorer.Show();
-                    soundplorer.LoadFile(filePath);
+                    ToolOpener.OpenInTool<Soundplorer.SoundplorerWPF>(filePath);
                     break;
                 case "CndEd":
-                    var cndEd = new ConditionalsEditor.ConditionalsEditorWindow();
-                    cndEd.Show();
-                    if (uindex != 0)
-                    {
-                        cndEd.LoadFile(filePath, uindex);
-                    }
-                    else
-                    {
-                        cndEd.LoadFile(filePath);
-                    }
-
+                    ToolOpener.OpenInTool<ConditionalsEditor.ConditionalsEditorWindow>(filePath, uindex);
                     break;
                 default:
                     var packEditor = new PackageEditor.PackageEditorWindow();
@@ -1065,29 +1025,20 @@ namespace LegendaryExplorer.Tools.AssetDatabase
         /// <param name="usage"></param>
         private void OpenInPlotEditor(string filePath, PlotUsage usage)
         {
-            var plotEditor = new PlotEditor.PlotEditorWindow();
-            plotEditor.Show();
-            plotEditor.LoadFile(filePath);
+            var plotIndex = 0;
             if (usage.ContainerID.HasValue)
             {
-                switch (usage.Context)
-                {
-                    case PlotUsageContext.Transition:
-                        plotEditor.GoToStateEvent(usage.ContainerID.Value);
-                        break;
-                    case PlotUsageContext.Codex:
-                        plotEditor.GoToCodex(usage.ContainerID.Value);
-                        break;
-                    case PlotUsageContext.Quest:
-                        plotEditor.GoToQuest(usage.ContainerID.Value);
-                        break;
-                    case PlotUsageContext.BoolTaskEval:
-                    case PlotUsageContext.IntTaskEval:
-                    case PlotUsageContext.FloatTaskEval:
-                    default:
-                        break;
-                }
+                plotIndex = usage.ContainerID.Value;
             }
+
+            var toolOpenArg = usage.Context switch
+            {
+                PlotUsageContext.Codex => 1,
+                PlotUsageContext.Quest => 2,
+                PlotUsageContext.Transition => 3,
+                _ => 4
+            };
+            ToolOpener.OpenInTool<PlotEditor.PlotEditorWindow>(filePath, plotIndex, toolOpenArg);
         }
 
         private void OpenFileInWindowsExplorer(object obj)

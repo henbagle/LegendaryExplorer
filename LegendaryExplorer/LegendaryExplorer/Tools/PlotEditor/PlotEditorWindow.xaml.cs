@@ -18,7 +18,7 @@ using Microsoft.Win32;
 
 namespace LegendaryExplorer.Tools.PlotEditor
 {
-    public partial class PlotEditorWindow : WPFBase, IRecents
+    public partial class PlotEditorWindow : WPFBase, IRecents, IOtherFileLoaderTool
     {
         public PlotEditorWindow() : base("Plot Editor")
         {
@@ -78,6 +78,29 @@ namespace LegendaryExplorer.Tools.PlotEditor
             if (MainTabControl.SelectedIndex == 0)
             {
                 MainTabControl.SelectedIndex = 1;
+            }
+        }
+
+        public void LoadFile(string path, int uIndex)
+        {
+            LoadFile(path);
+            GoToStateEvent(uIndex);
+        }
+
+        public void LoadFile(string path, int uIndex, int additionalId)
+        {
+            LoadFile(path);
+            switch (additionalId)
+            {
+                case 1:
+                    GoToCodex(uIndex);
+                    break;
+                case 2:
+                    GoToQuest(uIndex);
+                    break;
+                case 3:
+                    GoToStateEvent(uIndex);
+                    break;
             }
         }
 
