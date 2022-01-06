@@ -48,7 +48,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
     /// <summary>
     /// Interaction logic for PackageEditorWPF.xaml
     /// </summary>
-    public partial class PackageEditorWindow : WPFBase, IDropTarget, IBusyUIHost, IRecents
+    public partial class PackageEditorWindow : WPFBase, IDropTarget, IBusyUIHost, IRecents, IFileLoaderTool
     {
         public enum CurrentViewMode
         {
@@ -340,7 +340,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
             {
                 TryGetSelectedEntry(out var entry);
                 PackageEditorWindow pe = new PackageEditorWindow();
-                pe.LoadFile(matchingVersion, goToEntry: entry?.InstancedFullPath);
+                pe.LoadFile(matchingVersion, instancedFullPath: entry?.InstancedFullPath);
                 pe.Show();
                 return;
             }
@@ -354,7 +354,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 {
                     TryGetSelectedEntry(out var entry);
                     PackageEditorWindow pe = new PackageEditorWindow();
-                    pe.LoadFile(matchingVerMe1, goToEntry: entry?.InstancedFullPath);
+                    pe.LoadFile(matchingVerMe1, instancedFullPath: entry?.InstancedFullPath);
                     pe.Show();
                     return;
                 }
@@ -363,7 +363,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 {
                     TryGetSelectedEntry(out var entry);
                     PackageEditorWindow pe = new PackageEditorWindow();
-                    pe.LoadFile(matchingVerMe1, goToEntry: entry?.InstancedFullPath);
+                    pe.LoadFile(matchingVerMe1, instancedFullPath: entry?.InstancedFullPath);
                     pe.Show();
                     return;
                 }
@@ -518,10 +518,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                             else
                             {
                                 MessageBox.Show("Extracted into a new package.");
-                                var nwpf = new PackageEditorWindow();
-                                nwpf.LoadFile(d.FileName);
-                                nwpf.Show();
-                                nwpf.Activate();
+                                ToolOpener.OpenInTool<PackageEditorWindow>(d.FileName);
                             }
                         }
                     );
@@ -2479,7 +2476,23 @@ namespace LegendaryExplorer.Tools.PackageEditor
             RecentsController.InitRecentControl(Toolname, Recents_MenuItem, fileName => LoadFile(fileName));
         }
 
-        public void LoadFile(string s, int goToIndex = 0, string goToEntry = null)
+        public void LoadFile(string fileName)
+        {
+            loadFile(fileName, 0, null);
+        }
+
+        public void LoadFile(string fileName, int uIndex)
+        {
+            loadFile(fileName, uIndex, null);
+        }
+
+        public void LoadFile(string fileName, string instancedFullPath)
+        {
+            loadFile(fileName, 0, instancedFullPath);
+        }
+
+
+        private void loadFile(string s, int goToIndex = 0, string goToEntry = null)
         {
             // Todo: Maybe prompt if there are pending changes to the current package?
             try
@@ -3774,35 +3787,24 @@ namespace LegendaryExplorer.Tools.PackageEditor
             switch (myValue)
             {
                 case "SequenceEditor":
-                    var seqEditor = new Sequence_Editor.SequenceEditorWPF();
-                    seqEditor.LoadFile(Pcc.FilePath);
-                    seqEditor.Show();
+                    ToolOpener.OpenInTool<Sequence_Editor.SequenceEditorWPF>(Pcc.FilePath);
                     break;
                 case "FaceFXEditor":
-                    var facefxEditor = new FaceFXEditor.FaceFXEditorWindow();
-                    facefxEditor.LoadFile(Pcc.FilePath);
-                    facefxEditor.Show();
+                    ToolOpener.OpenInTool<FaceFXEditor.FaceFXEditorWindow>(Pcc.FilePath);
                     break;
                 case "SoundplorerWPF":
-                    var soundplorerWPF = new Soundplorer.SoundplorerWPF();
-                    soundplorerWPF.LoadFile(Pcc.FilePath);
-                    soundplorerWPF.Show();
+                    ToolOpener.OpenInTool<Soundplorer.SoundplorerWPF>(Pcc.FilePath);
                     break;
                 case "DialogueEditor":
-                    var dialogueEditorWPF = new DialogueEditorWindow();
-                    dialogueEditorWPF.LoadFile(Pcc.FilePath);
-                    dialogueEditorWPF.Show();
+                    ToolOpener.OpenInTool<DialogueEditorWindow>(Pcc.FilePath);
                     break;
                 case "PathfindingEditor":
                     var pathEditor = new PathfindingEditor.PathfindingEditorWindow(Pcc.FilePath);
                     pathEditor.Show();
                     break;
                 case "Meshplorer":
-                    var meshplorer = new MeshplorerWindow();
-                    meshplorer.LoadFile(Pcc.FilePath);
-                    meshplorer.Show();
+                    ToolOpener.OpenInTool<MeshplorerWindow>(Pcc.FilePath);
                     break;
-
             }
         }
 

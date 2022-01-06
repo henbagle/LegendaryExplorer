@@ -1004,16 +1004,7 @@ namespace LegendaryExplorer.Tools.AssetDatabase
                     ToolOpener.OpenInTool<ConditionalsEditor.ConditionalsEditorWindow>(filePath, uindex);
                     break;
                 default:
-                    var packEditor = new PackageEditor.PackageEditorWindow();
-                    packEditor.Show();
-                    if (uindex != 0)
-                    {
-                        packEditor.LoadFile(filePath, uindex);
-                    }
-                    else
-                    {
-                        packEditor.LoadFile(filePath);
-                    }
+                    ToolOpener.OpenInTool<PackageEditor.PackageEditorWindow>(filePath, uindex);
                     break;
             }
         }

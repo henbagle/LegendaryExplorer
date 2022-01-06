@@ -3320,21 +3320,17 @@ namespace LegendaryExplorer.DialogueEditor
                     }
                     else
                     {
-                        var facefxEditor = new FaceFXEditorWindow();
-                        facefxEditor.LoadFile(filePath);
-                        facefxEditor.Show();
+                        ToolOpener.OpenInTool<FaceFXEditorWindow>(filePath);
                     }
                     break;
                 case "PackageEditor":
-                    var packEditor = new PackageEditorWindow();
-                    packEditor.Show();
                     if (Pcc.IsUExport(uIndex) && filePath == Pcc.FilePath)
                     {
-                        packEditor.LoadFile(Pcc.FilePath, uIndex);
+                        ToolOpener.OpenInTool<PackageEditorWindow>(filePath, uIndex);
                     }
                     else
                     {
-                        packEditor.LoadFile(filePath, uIndex);
+                        ToolOpener.OpenInTool<PackageEditorWindow>(filePath, uIndex);
                     }
                     break;
                 case "SoundplorerWPF":
@@ -3344,9 +3340,7 @@ namespace LegendaryExplorer.DialogueEditor
                     }
                     else
                     {
-                        var soundplorerWPF = new SoundplorerWPF();
-                        soundplorerWPF.LoadFile(Pcc.FilePath);
-                        soundplorerWPF.Show();
+                        ToolOpener.OpenInTool<SoundplorerWPF>(Pcc.FilePath);
                     }
                     break;
                 case "SequenceEditor":
@@ -3356,13 +3350,7 @@ namespace LegendaryExplorer.DialogueEditor
                     }
                     else
                     {
-                        var seqEditor = new SequenceEditorWPF();
-                        seqEditor.Show();
-                        if (uIndex != 0)
-                        {
-                            seqEditor.LoadFile(filePath, uIndex);
-                        }
-                        else seqEditor.LoadFile(filePath);
+                        ToolOpener.OpenInTool<SequenceEditorWPF>(filePath, uIndex); ;
                     }
                     break;
             }

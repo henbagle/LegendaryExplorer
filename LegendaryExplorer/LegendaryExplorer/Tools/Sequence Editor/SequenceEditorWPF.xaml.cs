@@ -2345,11 +2345,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
 
                     if (filePath != null)
                     {
-
-                        var plotEd = new PlotEditorWindow();
-                        plotEd.Show();
-                        plotEd.LoadFile(filePath);
-                        plotEd.GoToStateEvent(stateEventKey);
+                        ToolOpener.OpenInTool<PlotEditorWindow>(filePath, stateEventKey);
                     }
                     else
                     {

@@ -23,7 +23,7 @@ namespace LegendaryExplorer.Tools
     }
 
     /// <summary>
-    /// Options to use when
+    /// Options to use when opening a file in a tool
     /// </summary>
     public class ToolOpenOptionsPackage
     {

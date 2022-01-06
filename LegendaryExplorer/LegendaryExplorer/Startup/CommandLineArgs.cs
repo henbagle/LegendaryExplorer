@@ -36,7 +36,7 @@ namespace LegendaryExplorer.Startup
         }
 
         // Method parameters MUST match option names in the RootCommand
-        private static void HandleCLIArgs(FileInfo open, string tool, int uIndex)
+        private static void HandleCLIArgs(FileInfo open, string tool, int UIndex)
         {
             var file = open;
 
@@ -46,14 +46,14 @@ namespace LegendaryExplorer.Startup
                 switch(tool)
                 {
                     case "SequenceEditor":
-                        ToolOpener.OpenInTool<SequenceEditorWPF>(file.FullName);
+                        ToolOpener.OpenInTool<SequenceEditorWPF>(file.FullName, UIndex);
                         break;
                     case "DialogueEditor":
-                        ToolOpener.OpenInTool<DialogueEditorWindow>(file.FullName);
+                        ToolOpener.OpenInTool<DialogueEditorWindow>(file.FullName, UIndex);
                         break;
                     case "SoundExplorer":
                     case "Soundplorer":
-                        ToolOpener.OpenInTool<SoundplorerWPF>(file.FullName);
+                        ToolOpener.OpenInTool<SoundplorerWPF>(file.FullName, UIndex);
                         break;
                     default:
                         switch(file.Extension.ToLower())
@@ -63,7 +63,7 @@ namespace LegendaryExplorer.Startup
                             case ".upk":
                             case ".u":
                             case ".udk":
-                                OpenTool<PackageEditorWindow>((p) => p.LoadFile(file.FullName, uIndex));
+                                ToolOpener.OpenInTool<PackageEditorWindow>(file.FullName, UIndex);
                                 break;
                             case ".tlk":
                                 var elhw = new ExportLoaderHostedWindow(new TLKEditorExportLoader(), file.FullName)
@@ -79,10 +79,10 @@ namespace LegendaryExplorer.Startup
                                 break;
                             case ".isb":
                             case ".afc":
-                                ToolOpener.OpenInTool<SoundplorerWPF>(file.FullName);
+                                ToolOpener.OpenInTool<SoundplorerWPF>(file.FullName, UIndex);
                                 break;
                             case ".cnd":
-                                ToolOpener.OpenInTool<ConditionalsEditorWindow>(file.FullName);
+                                ToolOpener.OpenInTool<ConditionalsEditorWindow>(file.FullName, UIndex);
                                 break;
 
                         }
@@ -123,15 +123,6 @@ namespace LegendaryExplorer.Startup
                         break;
                 }
             }
-        }
-
-        private static void OpenTool<T>(Action<T> toolAction = null)
-            where T : WPFBase, new()
-        {
-            var editor = new T();
-            editor.Show();
-            toolAction?.Invoke(editor);
-            editor.Activate();
         }
     }
 }

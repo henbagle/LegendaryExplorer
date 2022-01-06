@@ -186,9 +186,7 @@ namespace LegendaryExplorer.Tools.LiveLevelEditor
                 }
                 else
                 {
-                    PackageEditorWindow p = new();
-                    p.Show();
-                    p.LoadFile(filePath, uIndex);
+                    ToolOpener.OpenInTool<PackageEditorWindow>(filePath, uIndex);
                 }
             }
             else
