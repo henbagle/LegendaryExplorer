@@ -93,8 +93,8 @@ namespace LegendaryExplorer.MainWindow
         private void Tool_MouseOver(object sender, Tool t)
         {
             toolInfoPanel.Visibility = Visibility.Visible;
-            toolInfoIcon.Source = t.icon;
-            toolInfoText.Text = t.description;
+            toolInfoIcon.Source = t.Icon;
+            toolInfoText.Text = t.Description;
         }
 
         private void About_Click(object sender, RoutedEventArgs e)
@@ -131,10 +131,10 @@ namespace LegendaryExplorer.MainWindow
             string[] words = SearchBox.Text.ToLower().Split(' ');
             foreach (Tool tool in ToolSet.Items)
             {
-                if (tool.open != null)
+                if (tool.OpenTool != null)
                 {
                     //for each word we've typed in
-                    if (words.Any(word => tool.tags.FuzzyMatch(word) || tool.name.ToLower().Contains(word) || tool.name.ToLower().Split(' ').FuzzyMatch(word)))
+                    if (words.Any(word => tool.Tags.FuzzyMatch(word) || tool.Name.ToLower().Contains(word) || tool.Name.ToLower().Split(' ').FuzzyMatch(word)))
                     {
                         results.Add(tool);
                     }
@@ -175,7 +175,7 @@ namespace LegendaryExplorer.MainWindow
 
         private void SetToolList(string category)
         {
-            SetToolList(ToolSet.Items.Where((t) => t.category == category || t.category2 == category));
+            SetToolList(ToolSet.Items.Where((t) => t.Category == category || t.Category2 == category));
         }
 
         private void SetToolList(IEnumerable<Tool> tools)

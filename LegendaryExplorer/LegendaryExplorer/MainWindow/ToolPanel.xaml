@@ -53,7 +53,7 @@
                                     MouseEnter="Button_MouseEnter" MouseLeave="Button_MouseLeave" MouseRightButtonDown="Button_MouseRightButtonDown">
                                     <StackPanel Name="border">
                                         <Border BorderThickness="1" BorderBrush="{DynamicResource ForegroundBrush}">
-                                            <Image x:Name="toolIcon" Width="96" Height="96" Source="{Binding icon}" Opacity="0.85" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            <Image x:Name="toolIcon" Width="96" Height="96" Source="{Binding Icon}" Opacity="0.85" RenderOptions.BitmapScalingMode="HighQuality"/>
                                         </Border>
                                         <Rectangle x:Name="highlightUnderline" Height="3" Margin="0,2,0,0" Fill="{StaticResource HighlightColor}"
                                                    Visibility="Hidden"/>
