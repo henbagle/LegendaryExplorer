@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Packaging;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -224,10 +225,8 @@ namespace LegendaryExplorer.Tools.TextureStudio
 
         private void OpenInstanceInPackEd()
         {
-            var p = new PackageEditorWindow();
-            p.Show();
-            p.LoadFile(Path.Combine(SelectedFolder, SelectedInstance.RelativePackagePath), SelectedInstance.UIndex);
-            p.Activate(); //bring to front   
+            var path = Path.Combine(SelectedFolder, SelectedInstance.RelativePackagePath);
+            ToolOpener.OpenInTool<PackageEditorWindow>(path, SelectedInstance.UIndex);
         }
 
         private bool CanChangeAllInstances() => SelectedItem != null && SelectedItem.Instances.Any() && TFCSuffix != null && TFCSuffix.StartsWith("DLC_MOD_");

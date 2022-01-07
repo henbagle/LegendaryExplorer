@@ -25,47 +25,16 @@ namespace LegendaryExplorer.Tools
     /// <summary>
     /// Options to use when opening a file in a tool
     /// </summary>
-    public class ToolOpenOptionsPackage
+    /// <param name="FilePath">Path to a file for a tool to open</param>
+    /// <param name="UIndex">UIndex (or other relevant ID) of an export to select when the tool is opened</param>
+    /// <param name="AdditionalId">An additional ID (for example, TLK string id) to use when selecting an element, if the tool supports it</param>
+    public record ToolOpenOptionsPackage (string FilePath, int UIndex = 0, int AdditionalId = 0)
     {
-        /// <summary>
-        /// Path to a file for the tool to open
-        /// </summary>
-        public string FilePath { get; set; }
-
-        /// <summary>
-        /// UIndex (or other relevant ID) of an export to select when the tool is opened.
-        /// If this is zero, nothing is selected.
-        /// </summary>
-        public int UIndex { get; set; }
-
-        /// <summary>
-        /// An additional ID (for example, TLK string id) to use when selecting an element, if the tool supports it.
-        /// If this is zero, nothing is selected
-        /// </summary>
-        public int AdditionalId { get; set; }
-
         /// <summary>
         /// Create a <see cref="ToolOpenOptionsPackage"/> from an entry's FileRef and UIndex
         /// </summary>
         /// <param name="entry">Entry to get FilePath from</param>
-        public ToolOpenOptionsPackage(IEntry entry)
-        {
-            FilePath = entry.FileRef.FilePath;
-            UIndex = entry.UIndex;
-        }
-
-        /// <summary>
-        /// Basic constructor for <see cref="ToolOpenOptionsPackage"/>
-        /// </summary>
-        /// <param name="filePath">Path to file to open</param>
-        /// <param name="uIndex">Optional: UIndex of export to be selected</param>
-        /// <param name="additionalId">Optional: Additional ID to be used as necessary by the tool</param>
-        public ToolOpenOptionsPackage(string filePath, int uIndex = 0, int additionalId = 0)
-        {
-            FilePath = filePath;
-            UIndex = uIndex;
-            AdditionalId = additionalId;
-        }
+        public ToolOpenOptionsPackage(IEntry entry) : this(entry.FileRef.FilePath, entry.UIndex) { }
     }
 
     /// <summary>

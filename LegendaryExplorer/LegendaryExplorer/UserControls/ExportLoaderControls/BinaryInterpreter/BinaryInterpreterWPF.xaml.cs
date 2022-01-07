@@ -16,6 +16,7 @@ using LegendaryExplorer.Misc.AppSettings;
 using LegendaryExplorer.SharedUI;
 using LegendaryExplorer.SharedUI.Interfaces;
 using LegendaryExplorer.SharedUI.PeregrineTreeView;
+using LegendaryExplorer.Tools;
 using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorerCore.Gammtek.IO;
 using LegendaryExplorerCore.Helpers;
@@ -212,10 +213,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                 int index = b.UIndexValue == 0 ? b.GetObjectRefValue(CurrentLoadedExport) : b.UIndexValue;
                 if (CurrentLoadedExport.FileRef.IsEntry(index))
                 {
-                    var p = new PackageEditorWindow();
-                    p.Show();
-                    p.LoadFile(CurrentLoadedExport.FileRef.FilePath, index);
-                    p.Activate(); //bring to front  
+                    ToolOpener.OpenInTool<PackageEditorWindow>(CurrentLoadedExport.FileRef.FilePath, index);
                 }
             }
         }

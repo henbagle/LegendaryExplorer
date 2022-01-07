@@ -12,6 +12,7 @@ using LegendaryExplorer.Dialogs;
 using LegendaryExplorer.SharedUI;
 using LegendaryExplorer.SharedUI.Bases;
 using LegendaryExplorer.SharedUI.Interfaces;
+using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorer.UserControls.ExportLoaderControls;
 using LegendaryExplorer.UserControls.SharedToolControls;
 using LegendaryExplorerCore.Gammtek.Extensions.Collections.Generic;
@@ -657,10 +658,7 @@ namespace LegendaryExplorer.Tools.Meshplorer
         {
             if (MeshExportsList.SelectedItem is ExportEntry export)
             {
-                var p = new PackageEditor.PackageEditorWindow();
-                p.Show();
-                p.LoadFile(export.FileRef.FilePath, export.UIndex);
-                p.Activate(); //bring to front
+                ToolOpener.OpenInTool<PackageEditorWindow>(new ToolOpenOptionsPackage(export));
             }
         }
 

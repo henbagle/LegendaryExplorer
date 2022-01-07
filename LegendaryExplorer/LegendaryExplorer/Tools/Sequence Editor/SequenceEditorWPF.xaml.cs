@@ -1768,10 +1768,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
             if (CurrentObjects_ListBox.SelectedItem is SObj obj)
             {
                 AllowWindowRefocus = false; //prevents flicker effect when windows try to focus and then package editor activates
-                var p = new PackageEditor.PackageEditorWindow();
-                p.Show();
-                p.LoadFile(obj.Export.FileRef.FilePath, obj.UIndex);
-                p.Activate(); //bring to front
+                ToolOpener.OpenInTool<PackageEditor.PackageEditorWindow>(new ToolOpenOptionsPackage(obj.Export));
             }
         }
 
@@ -1780,10 +1777,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
             if (CurrentObjects_ListBox.SelectedItem is SVar sVar && sVar.Export.GetProperty<ObjectProperty>("ObjValue") is ObjectProperty objProp)
             {
                 AllowWindowRefocus = false; //prevents flicker effect when windows try to focus and then package editor activates
-                var p = new PackageEditor.PackageEditorWindow();
-                p.Show();
-                p.LoadFile(sVar.Export.FileRef.FilePath, objProp.Value);
-                p.Activate(); //bring to front
+                ToolOpener.OpenInTool<PackageEditor.PackageEditorWindow>(sVar.Export.FileRef.FilePath, objProp.Value);
             }
         }
 
@@ -2586,10 +2580,7 @@ namespace LegendaryExplorer.Tools.Sequence_Editor
                 if (objClass != null)
                 {
                     AllowWindowRefocus = false; //prevents flicker effect when windows try to focus and then package editor activates
-                    var p = new PackageEditor.PackageEditorWindow();
-                    p.Show();
-                    p.LoadFile(objClass.FileRef.FilePath, objClass.UIndex);
-                    p.Activate(); //bring to front
+                    ToolOpener.OpenInTool<PackageEditor.PackageEditorWindow>(new ToolOpenOptionsPackage(objClass));
                 }
                 else
                 {

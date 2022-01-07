@@ -50,14 +50,12 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor.IDE
 
                 if (filePath is null)
                 {
-                    MessageBox.Show($"Unable to navigate to definition of \"{name}\". This can happen if it is afunction parameter or local variable");
+                    MessageBox.Show($"Unable to navigate to definition of \"{name}\". This can happen if it is a function parameter or local variable");
                     e.Handled = true;
                     return;
                 }
-                var pwpf = new Tools.PackageEditor.PackageEditorWindow();
-                pwpf.Show();
-                pwpf.LoadFile(filePath, uIndex);
-                pwpf.RestoreAndBringToFront();
+
+                Tools.ToolOpener.OpenInTool<Tools.PackageEditor.PackageEditorWindow>(filePath, uIndex);
                 e.Handled = true;
             }
         }

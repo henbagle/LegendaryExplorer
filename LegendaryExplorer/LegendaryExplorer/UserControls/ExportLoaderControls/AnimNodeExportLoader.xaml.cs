@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Input;
 using LegendaryExplorer.SharedUI;
+using LegendaryExplorer.Tools;
 using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorerCore.Misc;
 using LegendaryExplorerCore.Packages;
@@ -70,10 +70,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         {
             if (parameter is int index)
             {
-                var p = new PackageEditorWindow();
-                p.Show();
-                p.LoadFile(CurrentLoadedExport.FileRef.FilePath, index);
-                p.Activate(); //bring to front
+                ToolOpener.OpenInTool<PackageEditorWindow>(CurrentLoadedExport.FileRef.FilePath, index);
             }
         }
 

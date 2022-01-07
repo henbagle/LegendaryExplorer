@@ -16,6 +16,7 @@ using LegendaryExplorer.Misc;
 using LegendaryExplorer.Misc.AppSettings;
 using LegendaryExplorer.SharedUI;
 using LegendaryExplorer.SharedUI.Interfaces;
+using LegendaryExplorer.Tools;
 using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorer.Tools.TlkManagerNS;
 using LegendaryExplorerCore.Gammtek;
@@ -358,10 +359,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
         {
             if (SelectedItem.Property is ObjectProperty op)
             {
-                var p = new PackageEditorWindow();
-                p.Show();
-                p.LoadFile(CurrentLoadedExport.FileRef.FilePath, op.Value);
-                p.Activate(); //bring to front
+                ToolOpener.OpenInTool<PackageEditorWindow>(CurrentLoadedExport.FileRef.FilePath, op.Value);
             }
         }
 

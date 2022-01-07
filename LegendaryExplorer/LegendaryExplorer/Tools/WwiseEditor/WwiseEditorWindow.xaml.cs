@@ -623,10 +623,7 @@ namespace LegendaryExplorer.Tools.WwiseEditor
             if (SelectedNode is WExport wExport)
             {
                 AllowWindowRefocus = false; //prevents flicker effect when windows try to focus and then package editor activates
-                var p = new PackageEditorWindow();
-                p.Show();
-                p.LoadFile(wExport.Export.FileRef.FilePath, wExport.Export.UIndex);
-                p.Activate(); //bring to front
+                ToolOpener.OpenInTool<PackageEditorWindow>(new ToolOpenOptionsPackage(wExport.Export));
             }
         }
 

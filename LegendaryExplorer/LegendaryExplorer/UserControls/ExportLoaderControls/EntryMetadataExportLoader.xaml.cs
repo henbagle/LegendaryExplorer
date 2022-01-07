@@ -9,6 +9,7 @@ using Be.Windows.Forms;
 using LegendaryExplorer.Dialogs;
 using LegendaryExplorer.Misc;
 using LegendaryExplorer.SharedUI;
+using LegendaryExplorer.Tools;
 using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorerCore.Gammtek.IO;
 using LegendaryExplorerCore.Helpers;
@@ -838,10 +839,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                     var resolved = EntryImporter.ResolveImport(imp);
                     if (resolved != null)
                     {
-                        var p = new PackageEditorWindow();
-                        p.Show();
-                        p.LoadFile(resolved.FileRef.FilePath, resolved.UIndex);
-                        p.Activate(); //bring to front
+                        ToolOpener.OpenInTool<PackageEditorWindow>(new ToolOpenOptionsPackage(resolved));
                     }
                 }
             }

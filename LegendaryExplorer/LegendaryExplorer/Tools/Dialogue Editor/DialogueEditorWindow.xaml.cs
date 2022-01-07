@@ -3350,7 +3350,7 @@ namespace LegendaryExplorer.DialogueEditor
                     }
                     else
                     {
-                        ToolOpener.OpenInTool<SequenceEditorWPF>(filePath, uIndex); ;
+                        ToolOpener.OpenInTool<SequenceEditorWPF>(filePath, uIndex);
                     }
                     break;
             }

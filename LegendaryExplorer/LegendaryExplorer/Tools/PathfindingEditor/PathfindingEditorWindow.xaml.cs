@@ -805,10 +805,7 @@ namespace LegendaryExplorer.Tools.PathfindingEditor
             if (ActiveNodes_ListBox.SelectedItem is ExportEntry export)
             {
                 AllowWindowRefocus = false; //prevents flicker effect when windows try to focus and then package editor activates
-                var p = new PackageEditor.PackageEditorWindow();
-                p.Show();
-                p.LoadFile(export.FileRef.FilePath, export.UIndex);
-                p.Activate(); //bring to front
+                ToolOpener.OpenInTool<PackageEditor.PackageEditorWindow>(new ToolOpenOptionsPackage(export));
             }
         }
         #endregion

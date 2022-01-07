@@ -575,10 +575,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                     IsBusy = false;
                     if (prevTask.Result is ExportEntry res)
                     {
-                        var pwpf = new PackageEditorWindow();
-                        pwpf.Show();
-                        pwpf.LoadEntry(res);
-                        pwpf.RestoreAndBringToFront();
+                        ToolOpener.OpenInTool<PackageEditorWindow>(new ToolOpenOptionsPackage(res));
                     }
                     else
                     {

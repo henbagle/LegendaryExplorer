@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Shapes;
 using LegendaryExplorer.Dialogs;
 using LegendaryExplorer.SharedUI;
+using LegendaryExplorer.Tools;
 using LegendaryExplorer.Tools.InterpEditor;
 using LegendaryExplorer.Tools.PackageEditor;
 using LegendaryExplorer.Tools.TlkManagerNS;
@@ -187,9 +188,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                     }
                 }
 
-                var packEd = new PackageEditorWindow();
-                packEd.Show();
-                packEd.LoadFile(Pcc.FilePath, exportEntry.UIndex);
+                ToolOpener.OpenInTool<PackageEditorWindow>(new ToolOpenOptionsPackage(exportEntry));
             }
         }
 
