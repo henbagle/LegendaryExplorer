@@ -75,7 +75,9 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
         }
 
         public override bool CanParse(ExportEntry exportEntry) =>
-            exportEntry.Game != MEGame.UDK && exportEntry.FileRef.Platform == MEPackage.GamePlatform.PC && (exportEntry.ClassName switch
+            exportEntry.Game != MEGame.UDK 
+            && (exportEntry.FileRef.Platform == MEPackage.GamePlatform.PC || exportEntry.Game.IsLEGame()) // LE games all should have identical bytecode, but we do not support it (but some users might try anyways)
+            && (exportEntry.ClassName switch
             {
                 "Class" => true,
                 "State" => true,
@@ -98,7 +100,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                 IsBusy = true;
                 BusyText = "Compiling local classes";
                 UnloadFileLib();
-                CurrentFileLib = new FileLib(Pcc);
+                CurrentFileLib = new FileLib(Pcc, true);
                 CurrentFileLib.InitializationStatusChange += CurrentFileLibOnInitialized;
                 if (IsVisible)
                 {
@@ -350,12 +352,12 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                 {
                     switch (CurrentLoadedExport.ClassName)
                     {
-                        //case "Class":
-                        //    {
-                        //        (_, MessageLog log) = UnrealScriptCompiler.CompileClass(Pcc, CurrentLoadedExport, ScriptText, CurrentFileLib);
-                        //        outputListBox.ItemsSource = log?.Content;
-                        //        break;
-                        //    }
+                        case "Class":
+                            {
+                                (_, MessageLog log) = UnrealScriptCompiler.CompileClass(Pcc, ScriptText, CurrentFileLib, CurrentLoadedExport, CurrentLoadedExport.Parent);
+                                outputListBox.ItemsSource = log?.Content;
+                                break;
+                            }
                         case "Function":
                         {
                             (_, MessageLog log) = UnrealScriptCompiler.CompileFunction(CurrentLoadedExport, ScriptText, CurrentFileLib);
@@ -465,7 +467,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
 
                     RootNode = ast;
                     ScriptText = text;
-                    textEditor.IsReadOnly = RootNode is Class;
+                    //textEditor.IsReadOnly = RootNode is Class;
                 });
 
             }
@@ -491,7 +493,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls.ScriptEditor
                             ast = UnrealScriptCompiler.CompileNewClassAST(Pcc, cls, log, CurrentFileLib, out bool vfTableChanged);
                             if (vfTableChanged)
                             {
-                                log.LogWarning("Compiling will cause Virtual Function Table to change! All classes that depends on this one will need recompilation to work properly!");
+                                log.LogWarning("Compiling will cause Virtual Function Table to change! All classes that depend on this one will need recompilation to work properly!");
                             }
                             break;
                         case Function func when CurrentLoadedExport.Parent is ExportEntry funcParent:

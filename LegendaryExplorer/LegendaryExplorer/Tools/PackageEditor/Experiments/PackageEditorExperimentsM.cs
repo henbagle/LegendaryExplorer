@@ -313,6 +313,101 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
             }).ContinueWithOnUIThread(foundCandidates => { pewpf.IsBusy = false; });
         }
 
+        public static void CramLevelFullOfStuff(IMEPackage startPackage, PackageEditorWindow pewpf)
+        {
+            if (pewpf.Pcc.Game != MEGame.LE3)
+            {
+                MessageBox.Show(pewpf, "Not an LE3 file!");
+                return;
+            }
+
+            var btsGlobal = pewpf.Pcc.Exports.FirstOrDefault(x => x.ClassName == "BioTriggerStream" && x.GetProperty<NameProperty>("TierName")?.Value.Name == "TIER_Global");
+            if (btsGlobal == null)
+            {
+                return;
+            }
+
+            var lskPackageNames = pewpf.Pcc.Exports.Where(x => x.ClassName == "LevelStreamingKismet").Select(x => x.GetProperty<NameProperty>("PackageName").Value).ToList();
+
+            var addedLSKs = new List<NameReference>();
+            //addedLSKs.Add(new NameReference("BioA_GthLeg", 201));
+            //addedLSKs.Add(new NameReference("BioA_GthLeg", 211));
+            //addedLSKs.Add(new NameReference("BioA_GthLeg", 216));
+            //addedLSKs.Add(new NameReference("BioA_GthLeg", 251));
+            //addedLSKs.Add(new NameReference("BioA_GthLeg", 261));
+            //addedLSKs.Add(new NameReference("BioA_GthLeg", 301));
+            addedLSKs.Add(new NameReference("BioA_GthLeg300BSP"));
+            addedLSKs.Add(new NameReference("BioA_GthLeg325Temp"));
+            //addedLSKs.Add(new NameReference("BioA_GthLeg",351));
+
+            //addedLSKs.Add(new NameReference("BioA_GthLeg", 500));
+            //addedLSKs.Add(new NameReference("BioA_GthLeg", 550));
+
+            var ss = btsGlobal.GetProperty<ArrayProperty<StructProperty>>("StreamingStates");
+            lskPackageNames.AddRange(addedLSKs);
+
+            var existingStuff = ss[0].GetProp<ArrayProperty<NameProperty>>("VisibleChunkNames");
+            existingStuff.AddRange(addedLSKs.Select(x => new NameProperty(x)));
+            btsGlobal.WriteProperty(ss);
+
+            var sourceToClone = pewpf.Pcc.Exports.First(x => x.ClassName == "LevelStreamingKismet");
+            foreach (var added in addedLSKs)
+            {
+                var newEntry = EntryCloner.CloneEntry(sourceToClone) as ExportEntry;
+                newEntry.WriteProperty(new NameProperty(added, "PackageName"));
+            }
+
+            // Step 2: Rebuild StreamingLevels
+            RebuildStreamingLevels(pewpf.Pcc);
+        }
+
+        private static void RebuildStreamingLevels(IMEPackage Pcc)
+        {
+            try
+            {
+                var levelStreamingKismets = new List<ExportEntry>();
+                ExportEntry bioworldinfo = null;
+                foreach (ExportEntry exp in Pcc.Exports)
+                {
+                    switch (exp.ClassName)
+                    {
+                        case "BioWorldInfo" when exp.ObjectName == "BioWorldInfo":
+                            bioworldinfo = exp;
+                            continue;
+                        case "LevelStreamingKismet" when exp.ObjectName == "LevelStreamingKismet":
+                            levelStreamingKismets.Add(exp);
+                            continue;
+                    }
+                }
+
+                levelStreamingKismets = levelStreamingKismets
+                    .OrderBy(o => o.GetProperty<NameProperty>("PackageName").ToString()).ToList();
+                if (bioworldinfo != null)
+                {
+                    var streamingLevelsProp =
+                        bioworldinfo.GetProperty<ArrayProperty<ObjectProperty>>("StreamingLevels") ??
+                        new ArrayProperty<ObjectProperty>("StreamingLevels");
+
+                    streamingLevelsProp.Clear();
+                    foreach (ExportEntry exp in levelStreamingKismets)
+                    {
+                        streamingLevelsProp.Add(new ObjectProperty(exp.UIndex));
+                    }
+
+                    bioworldinfo.WriteProperty(streamingLevelsProp);
+                    //MessageBox.Show("Done.");
+                }
+                else
+                {
+                    MessageBox.Show("No BioWorldInfo object found in this file.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error setting streaming levels:\n" + ex.Message);
+            }
+        }
+
         public static void ResetTexturesInFile(IMEPackage sourcePackage, PackageEditorWindow pewpf)
         {
             if (sourcePackage.Game != MEGame.ME1 && sourcePackage.Game != MEGame.ME2 &&
@@ -983,11 +1078,24 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                     if (streambin != null)
                     {
                         var duration = streambin.GetAudioInfo().GetLength();
-                        var durtnMS = wwevent.GetProperty<FloatProperty>("DurationMilliseconds");
-                        if (durtnMS != null && duration != null)
+                        switch(Pcc.Game)
                         {
-                            durtnMS.Value = (float)duration.TotalMilliseconds;
-                            wwevent.WriteProperty(durtnMS);
+                            case MEGame.ME3:
+                                var durtnMS = wwevent.GetProperty<FloatProperty>("DurationMilliseconds");
+                                if (durtnMS != null && duration != null)
+                                {
+                                    durtnMS.Value = (float)duration.TotalMilliseconds;
+                                    wwevent.WriteProperty(durtnMS);
+                                }
+                                break;
+                            case MEGame.LE3:
+                                var durtnSec = wwevent.GetProperty<FloatProperty>("DurationSeconds");
+                                if (durtnSec != null && duration != null)
+                                {
+                                    durtnSec.Value = (float)duration.TotalSeconds;
+                                    wwevent.WriteProperty(durtnSec);
+                                }
+                                break;
                         }
                     }
                 }
@@ -2348,7 +2456,25 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
 
         public static void MScanner(PackageEditorWindow pe)
         {
-            using var package = MEPackageHandler.OpenMEPackage(@"Y:\ModLibrary\ME3\Customizable EDI Armor\DLC_MOD_CustomizableEDIArmor\CookedPCConsole\BIOG_HMF_ARM_SHP_R_X.pcc");
+            SortedSet<string> configNames = new SortedSet<string>();
+            foreach (var f in MELoadedFiles.GetFilesLoadedInGame(MEGame.LE3))
+            {
+                using var pack = MEPackageHandler.UnsafePartialLoad(f.Value, x => x.ClassName == "Class"); // Only load class files
+                foreach (var c in pack.Exports.Where(x => x.ClassName == "Class"))
+                {
+                    var uclass = ObjectBinary.From<UClass>(c);
+                    configNames.Add("Bio" + uclass.ClassConfigName);
+                    Debug.WriteLine($"{c.ObjectName}: {uclass.ClassConfigName}");
+                }
+            }
+
+            Debug.WriteLine("ALL ITEMS:");
+            foreach (var v in configNames)
+            {
+                Debug.WriteLine(v);
+            }
+
+            //using var package = MEPackageHandler.OpenMEPackage(@"Y:\ModLibrary\ME3\Customizable EDI Armor\DLC_MOD_CustomizableEDIArmor\CookedPCConsole\BIOG_HMF_ARM_SHP_R_X.pcc");
 
 
             //var inputFilesDir = @"C:\Program Files (x86)\Mass Effect\DLC\DLC_Vegas\CookedPC\Maps\PRC2AA";

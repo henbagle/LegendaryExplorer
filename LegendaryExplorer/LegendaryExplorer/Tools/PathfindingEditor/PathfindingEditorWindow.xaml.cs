@@ -586,18 +586,13 @@ namespace LegendaryExplorer.Tools.PathfindingEditor
             InitializeComponent();
             pathfindingMouseListener = new PathfindingMouseListener(this); //Must be member so we can release reference
             graphEditor.AddInputEventListener(pathfindingMouseListener);
-
-            // CROSSGEN: Expand later
-            GameController.GetInteropTargetForGame(MEGame.LE1).GameReceiveMessage += ReceivedLE1Message;
-
-
         }
 
         private PlayerGPSNode PlayerGPSObject;
 
         private DateTime LastGPSUpdate = DateTime.Now;
 
-        private void ReceivedLE1Message(string obj)
+        private void ReceivedGameMessage(string obj)
         {
             if (PlayerGPSObject != null && (DateTime.Now - LastGPSUpdate) > TimeSpan.FromSeconds(1))
             {
@@ -707,6 +702,11 @@ namespace LegendaryExplorer.Tools.PathfindingEditor
             CombatZones.ClearEx();
             ActorGroup.ClearEx();
             GroupTag = "Tag";
+            if (Pcc != null)
+            {
+                GameController.GetInteropTargetForGame(Pcc.Game).GameReceiveMessage -= ReceivedGameMessage;
+            }
+
             StatusText = $"Loading {Path.GetFileName(fileName)}";
             Dispatcher.Invoke(new Action(() => { }), DispatcherPriority.ContextIdle, null);
 
@@ -748,9 +748,11 @@ namespace LegendaryExplorer.Tools.PathfindingEditor
                 CurrentFile = Path.GetFileName(fileName);
                 RecentsController.AddRecent(fileName, false, Pcc?.Game);
                 RecentsController.SaveRecentList(true);
-                Title = $"Pathfinding Editor WPF - {fileName}";
+                Title = $"Pathfinding Editor - {fileName}";
                 StatusText = null; //Nothing to prepend.
                 PathfindingEditorWPF_ValidationPanel.SetLevel(PersistentLevelExport);
+                GameController.GetInteropTargetForGame(Pcc.Game).GameReceiveMessage += ReceivedGameMessage;
+
             }
             else
             {
@@ -1672,7 +1674,7 @@ namespace LegendaryExplorer.Tools.PathfindingEditor
         #endregion
 
         #region EditNodes
-        public override void handleUpdate(List<PackageUpdate> updates)
+        public override void HandleUpdate(List<PackageUpdate> updates)
         {
             List<PackageChange> changes = updates.Select(x => x.Change).ToList();
             bool hasExportNonDataChanges = changes.Any(x => x != PackageChange.ExportData && x.HasFlag(PackageChange.Export));
@@ -4924,7 +4926,7 @@ namespace LegendaryExplorer.Tools.PathfindingEditor
 
                     }
 
-                    client = new NamedPipeClientStream("LEX_LE1_COMM_PIPE");
+                    client = new NamedPipeClientStream($"LEX_{Pcc.Game}_COMM_PIPE");
                     client.Connect();
                     pipeReader = new StreamReader(client);
                     pipeWriter = new StreamWriter(client);
@@ -4937,7 +4939,7 @@ namespace LegendaryExplorer.Tools.PathfindingEditor
                 }
                 else
                 {
-                    client = new NamedPipeClientStream("LEX_LE1_COMM_PIPE");
+                    client = new NamedPipeClientStream($"LEX_{Pcc.Game}_COMM_PIPE");
                     client.Connect();
                     pipeReader = new StreamReader(client);
                     pipeWriter = new StreamWriter(client);

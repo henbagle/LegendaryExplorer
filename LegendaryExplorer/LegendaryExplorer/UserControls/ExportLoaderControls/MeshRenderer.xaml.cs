@@ -257,7 +257,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                 {
                     WorldMesh m = Preview.LODs[CurrentLOD].Mesh;
                     MeshContext.Camera.Position = m.AABBCenter;
-                    MeshContext.Camera.Pitch = -(float)Math.PI / 7.0f;
+                    MeshContext.Camera.Pitch = -MathF.PI / 7.0f;
                     if (MeshContext.Camera.FirstPerson)
                     {
                         MeshContext.Camera.Position -= MeshContext.Camera.CameraForward * MeshContext.Camera.FocusDepth;
@@ -266,8 +266,8 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                 else
                 {
                     MeshContext.Camera.Position = Vector3.Zero;
-                    MeshContext.Camera.Pitch = -(float)Math.PI / 5.0f;
-                    MeshContext.Camera.Yaw = (float)Math.PI / 4.0f;
+                    MeshContext.Camera.Pitch = -MathF.PI / 5.0f;
+                    MeshContext.Camera.Yaw = MathF.PI / 4.0f;
                 }
             }
         }
@@ -871,27 +871,13 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
 
         public void EnsureUModel_BackgroundThread(object sender, DoWorkEventArgs args)
         {
-            if (UModelHelper.GetLocalUModelVersion() < UModelHelper.SupportedUModelBuildNum)
-            {
-                void progressCallback(long bytesDownloaded, long bytesToDownload)
-                {
-                    BusyProgressBarMax = (int)bytesToDownload;
-                    BusyProgressBarValue = (int)bytesDownloaded;
-                }
-
-                //try{
-                BusyText = "Downloading umodel";
-                BusyProgressIndeterminate = false;
-                BusyProgressBarValue = 0;
-                IsBusy = true;
-                args.Result =
-                    OnlineContent.EnsureStaticZippedExecutable("umodel_win32.zip", "umodel", "umodel.exe",
-                        progressCallback, forceDownload: true);
-            }
-            else
-            {
-                args.Result = null; // OK
-            }
+            // Pass error message back
+            args.Result = UModelHelper.EnsureUModel(
+                () => IsBusy = true,
+                maxProgress => BusyProgressBarMax = maxProgress,
+                currentProgress => BusyProgressBarValue = currentProgress,
+                busyText => BusyText = busyText
+                );
         }
 
 

@@ -19,7 +19,7 @@ namespace LegendaryExplorerCore.Packages
         public static bool GlobalSharedCacheEnabled = true;
 
         static readonly ConcurrentDictionary<string, IMEPackage> openPackages = new(StringComparer.OrdinalIgnoreCase);
-        public static readonly ObservableCollection<IMEPackage> packagesInTools = new();
+        public static readonly ObservableCollection<IMEPackage> PackagesInTools = new();
 
         // Package loading for UDK 2014/2015
         static Func<string, UDKPackage> UDKConstructorDelegate;
@@ -127,10 +127,10 @@ namespace LegendaryExplorerCore.Packages
         /// Opens a Mass Effect package file. By default, this call will attempt to return an existing open (non-disposed) package at the same path if it is opened twice. Use the forceLoadFromDisk parameter to ignore this behavior.
         /// </summary>
         /// <param name="pathToFile">Path to the file to open</param>
-        /// <param name="user">????</param>
+        /// <param name="user">IPackageUser to register as a user of this package</param>
         /// <param name="forceLoadFromDisk">If the package being opened should skip the shared package cache and forcibly load from disk. </param>
         /// <param name="quickLoad">Only load the header. Meant for when you just need to get info about a package without caring about the contents.</param>
-        /// <param name="diskIOSyncLock"></param>
+        /// <param name="diskIOSyncLock">If provided, all I/O will be done inside a lock on this object</param>
         /// <returns></returns>
         public static IMEPackage OpenMEPackage(string pathToFile, IPackageUser user = null, bool forceLoadFromDisk = false, bool quickLoad = false, object diskIOSyncLock = null)
         {
@@ -341,7 +341,7 @@ namespace LegendaryExplorerCore.Packages
 
             if (useSharedCache)
             {
-                pkg.noLongerUsed += Package_noLongerUsed;
+                pkg.NoLongerUsed += Package_noLongerUsed;
             }
 
             return pkg;
@@ -376,6 +376,18 @@ namespace LegendaryExplorerCore.Packages
         /// <param name="game">What game the package is for</param>
         public static void CreateEmptyLevel(string outpath, MEGame game)
         {
+            var pcc = CreateEmptyLevelStream(Path.GetFileNameWithoutExtension(outpath), game);
+            pcc.WriteToFile(outpath); // You must pass the path here as this file was loaded from memory
+        }
+
+        /// <summary>
+        /// Generates an empty level package and serializes it to a stream, ready for writing to disk or loading as a package.
+        /// </summary>
+        /// <param name="game">Game to generate for</param>
+        /// <param name="levelPackageName">The name of the level package in the file. Typically this is just the expected filename without an extension</param>
+        /// <returns>MemoryStream of generated package file</returns>
+        public static MemoryStream CreateEmptyLevelStream(string levelPackageName, MEGame game)
+        {
             if (!game.IsOTGame() && !game.IsLEGame())
                 throw new Exception(@"Cannot create a level for a game that is not ME1/2/3 or LE1/2/3");
 
@@ -387,7 +399,7 @@ namespace LegendaryExplorerCore.Packages
                 string name = pcc.Names[i];
                 if (name.Equals(emptyLevelName))
                 {
-                    var newName = name.Replace(emptyLevelName, Path.GetFileNameWithoutExtension(outpath));
+                    var newName = name.Replace(emptyLevelName, levelPackageName);
                     pcc.replaceName(i, newName);
                 }
             }
@@ -402,7 +414,9 @@ namespace LegendaryExplorerCore.Packages
             });
             packageExport.PackageGUID = packguid;
             pcc.PackageGuid = packguid;
-            pcc.Save(outpath); // You must pass the path here as this file was loaded from memory
+            var ms = pcc.SaveToStream(game.IsLEGame());
+            ms.Position = 0; // Set position to beginning so users of this can open package immediately.
+            return ms;
         }
 
         private static void Package_noLongerUsed(UnrealPackageFile sender)
@@ -423,18 +437,18 @@ namespace LegendaryExplorerCore.Packages
 
         private static void addToPackagesInTools(IMEPackage package)
         {
-            if (!packagesInTools.Contains(package))
+            if (!PackagesInTools.Contains(package))
             {
-                packagesInTools.Add(package);
-                package.noLongerOpenInTools += Package_noLongerOpenInTools;
+                PackagesInTools.Add(package);
+                package.NoLongerOpenInTools += Package_noLongerOpenInTools;
             }
         }
 
         private static void Package_noLongerOpenInTools(UnrealPackageFile sender)
         {
             IMEPackage package = sender as IMEPackage;
-            packagesInTools.Remove(package);
-            sender.noLongerOpenInTools -= Package_noLongerOpenInTools;
+            PackagesInTools.Remove(package);
+            sender.NoLongerOpenInTools -= Package_noLongerOpenInTools;
 
         }
 

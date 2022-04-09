@@ -91,6 +91,7 @@ namespace LegendaryExplorerCore.Packages
         public const ushort LE2UnrealVersion = 684;
         public const ushort LE2LicenseeVersion = 168;
 
+        // PS4 Orbis uses this version information too
         public const ushort LE3UnrealVersion = 685;
         public const ushort LE3LicenseeVersion = 205;
 
@@ -102,7 +103,7 @@ namespace LegendaryExplorerCore.Packages
         /// <summary>
         /// This is not useful for modding but we should not be changing the format of the package file.
         /// </summary>
-        public List<string> AdditionalPackagesToCook = new List<string>();
+        public readonly List<string> AdditionalPackagesToCook = new();
 
         /// <summary>
         /// Passthrough to UnrealPackageFile's IsModified
@@ -213,6 +214,7 @@ namespace LegendaryExplorerCore.Packages
         /// <param name="fs"></param>
         /// <param name="filePath"></param>
         /// <param name="onlyHeader">Only read header data. Do not load the tables or decompress</param>
+        /// <param name="dataLoadPredicate">If provided, export data will only be read for exports that match the predicate</param>
         private MEPackage(Stream fs, string filePath = null, bool onlyHeader = false, Func<ExportEntry, bool> dataLoadPredicate = null) : base(filePath != null ? File.Exists(filePath) ? Path.GetFullPath(filePath) : filePath : null)
         {
             //MemoryStream fs = new MemoryStream(File.ReadAllBytes(filePath));
@@ -342,6 +344,14 @@ namespace LegendaryExplorerCore.Packages
                 default:
                     throw new FormatException("Not a Mass Effect Package!");
             }
+
+            if (Game.IsLEGame() && filePath != null && Path.GetExtension(filePath) == ".xxx")
+            {
+                // There is no way to differentiate Orbis vs Durango so we will just mark it as 
+                // Orbis.
+                Platform = GamePlatform.PS3; // Just use PS3 flag for now.
+            }
+
             FullHeaderSize = packageReader.ReadInt32();
             int foldernameStrLen = packageReader.ReadInt32();
             //always "None", so don't bother saving result
@@ -485,15 +495,28 @@ namespace LegendaryExplorerCore.Packages
             //read namelist
             inStream.JumpTo(NameOffset);
             names = new List<string>(NameCount);
-            for (int i = 0; i < NameCount; i++)
+            nameLookupTable.EnsureCapacity(NameCount);
+            if (Game > MEGame.ME2 && inStream is CompressionHelper.PackageDecompressionStreamBase packageDecompressionStream)
             {
-                var name = packageReader.ReadUnrealString();
-                names.Add(name);
-                nameLookupTable[name] = i;
-                if (Game == MEGame.ME1 && Platform != GamePlatform.PS3)
-                    inStream.Skip(8);
-                else if (Game == MEGame.ME2 && Platform != GamePlatform.PS3)
-                    inStream.Skip(4);
+                for (int i = 0; i < NameCount; i++)
+                {
+                    string name = packageDecompressionStream.ReadUnrealStringLittleEndianFast();
+                    names.Add(name);
+                    nameLookupTable[name] = i;
+                }
+            }
+            else
+            {
+                for (int i = 0; i < NameCount; i++)
+                {
+                    string name = packageReader.ReadUnrealString();
+                    names.Add(name);
+                    nameLookupTable[name] = i;
+                    if (Game == MEGame.ME1 && Platform != GamePlatform.PS3)
+                        inStream.Skip(8);
+                    else if (Game == MEGame.ME2 && Platform != GamePlatform.PS3)
+                        inStream.Skip(4);
+                }
             }
 
             //read importTable
@@ -552,14 +575,16 @@ namespace LegendaryExplorerCore.Packages
             foreach (ExportEntry export in dataLoadPredicate is null ? exports : exports.Where(dataLoadPredicate))
             {
                 inStream.JumpTo(export.DataOffset);
-                export.Data = packageReader.ReadBytes(export.DataSize);
+                var data = new byte[export.DataSize];
+                int bytesRead = inStream.Read(data.AsSpan());
+                if (bytesRead != data.Length)
+                {
+                    throw new EndOfStreamException("Attempted to read export data past the end of the stream!");
+                }
+                export.Data = data;
             }
 
             packageReader.Dispose();
-            if (dataLoadPredicate is null && Game.IsGame1() && Platform == GamePlatform.PC)
-            {
-                ReadLocalTLKs();
-            }
 
 
             if (filePath != null)
@@ -567,8 +592,8 @@ namespace LegendaryExplorerCore.Packages
                 Localization = filePath.GetUnrealLocalization();
             }
 
+            //Allocate the lookup table. It is initialized on an if-needed basis.
             EntryLookupTable = new CaseInsensitiveDictionary<IEntry>(ExportCount + ImportCount);
-            RebuildLookupTable(); // Builds the export/import lookup tables.
 #if AZURE
             if (platformNeedsResolved)
             {
@@ -1424,34 +1449,6 @@ namespace LegendaryExplorerCore.Packages
                 {
                     ms.WriteInt32(0);
                 }
-            }
-        }
-        private void ReadLocalTLKs()
-        {
-            LocalTalkFiles.Clear();
-            var exportsToLoad = new List<ExportEntry>();
-            foreach (var tlkFileSet in Exports.Where(x => x.ClassName == "BioTlkFileSet" && !x.IsDefaultObject).Select(exp => exp.GetBinaryData<BioTlkFileSet>()))
-            {
-                foreach ((NameReference lang, BioTlkFileSet.BioTlkSet bioTlkSet) in tlkFileSet.TlkSets)
-                {
-                    if (LegendaryExplorerCoreLibSettings.Instance.TLKDefaultLanguage.Equals(lang, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        exportsToLoad.Add(GetUExport(LegendaryExplorerCoreLibSettings.Instance.TLKGenderIsMale ? bioTlkSet.Male : bioTlkSet.Female));
-                        break;
-                    }
-                }
-            }
-
-            // Global TLK
-            foreach (var tlk in Exports.Where(x => x.ClassName == "BioTlkFile" && !x.IsDefaultObject && !exportsToLoad.Contains(x)))
-            {
-                exportsToLoad.Add(tlk);
-            }
-
-            foreach (var exp in exportsToLoad)
-            {
-                //Debug.WriteLine("Loading local TLK: " + exp.GetIndexedFullPath);
-                LocalTalkFiles.Add(new ME1TalkFile(exp));
             }
         }
 

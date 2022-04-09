@@ -6308,7 +6308,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                                 subnodes.AddRange(topLevelTree.ChildrenProperties);
 
                                 //finish writing function here
-                                pos = props.endOffset;
+                                pos = (int)stream.Position;
 
                             }
                         }
@@ -6360,7 +6360,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             {
                 try
                 {
-                    (List<Token> tokens, _) = Bytecode.ParseBytecode(scriptBytes, CurrentLoadedExport, (int)pos + 4);
+                    (List<Token> tokens, _) = Bytecode.ParseBytecode(scriptBytes, CurrentLoadedExport);
                     string scriptText = "";
                     foreach (Token t in tokens)
                     {

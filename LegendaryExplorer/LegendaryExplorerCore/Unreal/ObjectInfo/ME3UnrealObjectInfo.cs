@@ -284,7 +284,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                 case PropertyType.FloatProperty:
                     return new FloatProperty(0f, propName);
                 case PropertyType.DelegateProperty:
-                    return new DelegateProperty(0, "None");
+                    return new DelegateProperty("None", 0);
                 case PropertyType.ObjectProperty:
                     return new ObjectProperty(0, propName);
                 case PropertyType.NameProperty:
@@ -352,6 +352,8 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
             foreach (var filePath in allFiles)
             {
                 using IMEPackage pcc = MEPackageHandler.OpenME3Package(filePath);
+                if (pcc.Localization != MELocalization.None && pcc.Localization != MELocalization.INT)
+                    continue; // DO NOT LOOK AT NON-INT AS SOME GAMES WILL BE MISSING THESE FILES (due to backup/storage)
                 for (int i = 1; i <= pcc.ExportCount; i++)
                 {
                     ExportEntry exportEntry = pcc.GetUExport(i);
@@ -381,6 +383,8 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
             foreach (string filePath in allFiles)
             {
                 using IMEPackage pcc = MEPackageHandler.OpenME3Package(filePath);
+                if (pcc.Localization != MELocalization.None && pcc.Localization != MELocalization.INT)
+                    continue; // DO NOT LOOK AT NON-INT AS SOME GAMES WILL BE MISSING THESE FILES (due to backup/storage)
                 foreach (ExportEntry exportEntry in pcc.Exports)
                 {
                     if (exportEntry.IsA("SequenceObject"))

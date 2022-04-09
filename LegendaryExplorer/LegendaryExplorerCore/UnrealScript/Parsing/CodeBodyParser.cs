@@ -5,13 +5,11 @@ using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Misc;
 using LegendaryExplorerCore.Packages;
 using LegendaryExplorerCore.Unreal;
-using LegendaryExplorerCore.Unreal.BinaryConverters;
 using LegendaryExplorerCore.UnrealScript.Analysis.Symbols;
 using LegendaryExplorerCore.UnrealScript.Analysis.Visitors;
 using LegendaryExplorerCore.UnrealScript.Compiling.Errors;
 using LegendaryExplorerCore.UnrealScript.Language.Tree;
 using LegendaryExplorerCore.UnrealScript.Language.Util;
-using LegendaryExplorerCore.UnrealScript.Lexing;
 using LegendaryExplorerCore.UnrealScript.Lexing.Tokenizing;
 using LegendaryExplorerCore.UnrealScript.Utilities;
 using static LegendaryExplorerCore.UnrealScript.Utilities.Keywords;
@@ -19,10 +17,9 @@ using static LegendaryExplorerCore.Unreal.UnrealFlags;
 
 namespace LegendaryExplorerCore.UnrealScript.Parsing
 {
-    public sealed class CodeBodyParser : StringParserBase
+    internal sealed class CodeBodyParser : StringParserBase
     {
         private const int NOPRECEDENCE = int.MaxValue;
-        private readonly string OuterClassScope;
         private readonly ASTNode Node;
         private readonly CodeBody Body;
         private readonly Class Self;
@@ -158,7 +155,6 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             Node = containingNode;
             Body = body;
             Self = NodeUtils.GetContainingClass(body);
-            OuterClassScope = NodeUtils.GetOuterClassScope(containingNode);
 
 
             ExpressionScopes = new();
@@ -726,7 +722,7 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             };
             if (fc != null)
             {
-                if (!(fc.Function.Node is Function func) || !func.Flags.Has(EFunctionFlags.Iterator))
+                if (fc.Function.Node is not Function func || !func.Flags.Has(EFunctionFlags.Iterator))
                 {
                     TypeError($"Expected an iterator function call or dynamic array iterator after '{FOREACH}'!", iterator);
                 }
@@ -737,6 +733,10 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
                         TypeError("Second argument to iterator function must be the same class or a subclass of the class passed as the first argument!", fc.Arguments[1]);
                     }
                 }
+            }
+            else if (iterator is null)
+            {
+                throw ParseError("Expected an iterator expression after '{FOREACH}'!", CurrentPosition);
             }
             else if (iterator is not DynArrayIterator && iterator is not CompositeSymbolRef {InnerSymbol: DynArrayIterator})
             {
@@ -894,7 +894,15 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             {
                 caseLit.NumType = INT;
             }
-            if (!(switchType is Enumeration && value is IntegerLiteral) && !NodeUtils.TypeEqual(switchType, value.ResolveType()))
+            if (switchType == SymbolTable.ByteType && value is IntegerLiteral possibleByteLiteral)
+            {
+                if (possibleByteLiteral.Value is < byte.MinValue or > byte.MaxValue)
+                {
+                    TypeError("Since the switch expression is of type 'byte', this number must be in the range 0-255.", value);
+                }
+                //AddConversion will auto-convert it to a byte literal
+            }
+            else if (!(switchType is Enumeration && value is IntegerLiteral) && !NodeUtils.TypeEqual(switchType, value.ResolveType()))
             {
                 TypeError("Case expression must evaluate to the same type as the switch expression!", value);
             }
@@ -1178,6 +1186,10 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             {
                 preFixToken.SyntaxType = EF.Operator;
                 expr = CompositeRef();
+                if (expr is null)
+                {
+                    return null;
+                }
                 if (expr is DynArrayLength)
                 {
                     ParseError($"The {LENGTH} property of a dynamic array can only be changed by direct assignment!", expr);
@@ -1197,6 +1209,10 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             if (Matches(TokenType.ExclamationMark, EF.Operator))
             {
                 expr = Unary();
+                if (expr is null)
+                {
+                    return null;
+                }
                 VariableType exprType = expr.ResolveType();
                 if (exprType != SymbolTable.BoolType)
                 {
@@ -1210,6 +1226,10 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             if (Matches(TokenType.MinusSign, EF.Operator))
             {
                 expr = Unary();
+                if (expr is null)
+                {
+                    return null;
+                }
                 VariableType exprType = expr.ResolveType();
                 if (exprType == SymbolTable.ByteType)
                 {
@@ -1236,6 +1256,10 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             if (Matches(TokenType.Complement, EF.Operator))
             {
                 expr = Unary();
+                if (expr is null)
+                {
+                    return null;
+                }
                 if (expr is IntegerLiteral intLit)
                 {
                     intLit.NumType = INT;
@@ -1252,6 +1276,10 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
             }
 
             expr = CompositeRef();
+            if (expr is null)
+            {
+                return null;
+            }
 
             if (Consume(TokenType.Increment, TokenType.Decrement) is {} postFixToken)
             {
@@ -1909,7 +1937,7 @@ namespace LegendaryExplorerCore.UnrealScript.Parsing
                     Expression valueArg = CompositeRef() ?? throw ParseError("Expected argument to dynamic array iterator!", CurrentPosition);
                     if (!NodeUtils.TypeEqual(valueArg.ResolveType(), dynArrType.ElementType) && (Game.IsGame3() || 
                         //documentation says this shouldn't be allowed, but bioware code does this in ME2
-                        valueArg.ResolveType() is Class argClass && dynArrType.ElementType is Class dynArrClass && !dynArrClass.SameAsOrSubClassOf(argClass)))
+                        !(valueArg.ResolveType() is Class argClass && dynArrType.ElementType is Class dynArrClass && dynArrClass.SameAsOrSubClassOf(argClass))))
                     {
                         string elementType = dynArrType.ElementType.FullTypeName();
                         TypeError($"Iterator variable for an '{ARRAY}<{elementType}>' must be of type '{elementType}'", expr);

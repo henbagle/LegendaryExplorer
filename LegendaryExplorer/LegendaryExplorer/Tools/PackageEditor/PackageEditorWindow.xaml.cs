@@ -39,6 +39,8 @@ using LegendaryExplorerCore.TLK.ME1;
 using LegendaryExplorerCore.Unreal;
 using LegendaryExplorerCore.Unreal.BinaryConverters;
 using LegendaryExplorerCore.Unreal.ObjectInfo;
+using LegendaryExplorerCore.UnrealScript;
+using LegendaryExplorerCore.UnrealScript.Compiling.Errors;
 using Microsoft.Win32;
 using Microsoft.WindowsAPICodePack.Dialogs;
 using Newtonsoft.Json;
@@ -236,6 +238,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
         public ICommand ReindexDuplicateIndexesCommand { get; set; }
         public ICommand ReplaceReferenceLinksCommand { get; set; }
         public ICommand CalculateExportMD5Command { get; set; }
+        public ICommand CreateClassCommand { get; set; }
 
         private void LoadCommands()
         {
@@ -304,6 +307,66 @@ namespace LegendaryExplorer.Tools.PackageEditor
 
             NavigateForwardCommand = new GenericCommand(NavigateToNextEntry, () => CurrentView == CurrentViewMode.Tree && ForwardsIndexes != null && ForwardsIndexes.Any());
             NavigateBackCommand = new GenericCommand(NavigateToPreviousEntry, () => CurrentView == CurrentViewMode.Tree && BackwardsIndexes != null && BackwardsIndexes.Any());
+
+            CreateClassCommand = new GenericCommand(CreateClass, IsLoadedPackageME);
+        }
+
+        private void CreateClass()
+        {
+            IEntry parent = null;
+            string fileName = Path.GetFileName(Pcc.FilePath);
+            if (fileName.CaseInsensitiveEquals("Startup_INT.pcc") || !FileLib.BaseFileNames(Pcc.Game).Contains(fileName, StringComparer.OrdinalIgnoreCase))
+            {
+                //not a base file, so classes must be within a package.
+
+                var existingPackages = new List<ExportEntry>();
+                foreach (TreeNode<IEntry, int> root in Pcc.Tree.Roots)
+                {
+                    if (root.Data is ExportEntry exp && exp.ClassName.CaseInsensitiveEquals("Package"))
+                    {
+                        existingPackages.Add(exp);
+                    }
+                }
+
+                if (existingPackages.Count is 0)
+                {
+                    MessageBox.Show(this, "Classes must be children of a Package export. Add one to the file first.");
+                    return;
+                }
+                parent = EntrySelector.GetEntry<ExportEntry>(this, Pcc, "Pick a Package export your class should be a child of.", exp => existingPackages.Contains(exp));
+                if (parent is null)
+                {
+                    return;
+                }
+            }
+            var className = PromptDialog.Prompt(this, "Enter the name of your class:", "Class Name", "MyClass", true);
+            if (string.IsNullOrWhiteSpace(className))
+            {
+                return;
+            }
+            string fullPath = parent is null ? className : $"{parent.InstancedFullPath}.{className}";
+            if (Pcc.FindEntry(fullPath) is not null)
+            {
+                MessageBox.Show(this, $"'{fullPath}' already exists in this file!", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            var fileLib = new FileLib(Pcc);
+            if (!fileLib.Initialize())
+            {
+                var dlg = new ListDialog(fileLib.InitializationLog.Content.Select(msg => msg.ToString()), "Script Error", "Could not build script database for this file!", this);
+                dlg.Show();
+                return;
+            }
+            (_, MessageLog log) = UnrealScriptCompiler.CompileClass(Pcc, $"class {className};", fileLib, parent: parent);
+            if (log.HasErrors)
+            {
+                var dlg = new ListDialog(fileLib.InitializationLog.Content.Select(msg => msg.ToString()), "Script Error", "Could not create class!", this);
+                dlg.Show();
+                return;
+            }
+            CurrentView = CurrentViewMode.Tree;
+            GoToNumber(Pcc.FindEntry(fullPath)?.UIndex ?? 0);
         }
 
         private void CalculateExportMD5()
@@ -321,6 +384,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
 
         private bool IsLoadedPackageOT() => Pcc != null && Pcc.Game.IsOTGame();
         private bool IsLoadedPackageLE() => Pcc != null && Pcc.Game.IsLEGame();
+        private bool IsLoadedPackageME() => Pcc != null && (Pcc.Game.IsLEGame() || Pcc.Game.IsOTGame());
 
         private void OpenOtherVersion(bool openLegendaryVersion)
         {
@@ -393,7 +457,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                         }
                         else
                         {
-                            var resolvedExp = EntryImporter.ResolveImport(impTV.Entry as ImportEntry, null, cache, clipRootLevelPackage: false);
+                            var resolvedExp = EntryImporter.ResolveImport(impTV.Entry as ImportEntry, null, cache);
                             if (resolvedExp == null)
                             {
                                 unresolvableImports.Add(new EntryStringPair(impTV.Entry, $"Unresolvable import: {impTV.Entry.InstancedFullPath}"));
@@ -573,7 +637,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
             {
                 BusyText = "Attempting to find source of import...";
                 IsBusy = true;
-                Task.Run(() => EntryImporter.ResolveImport(curImport, clipRootLevelPackage: false)).ContinueWithOnUIThread(prevTask =>
+                Task.Run(() => EntryImporter.ResolveImport(curImport)).ContinueWithOnUIThread(prevTask =>
                 {
                     IsBusy = false;
                     if (prevTask.Result is ExportEntry res)
@@ -808,7 +872,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                                 string dataPropName = matchingExport.ClassName == "GFxMovieInfo" ? "RawData" : "Data";
                                 var rawData = props.GetProp<ImmutableByteArrayProperty>(dataPropName);
                                 //Write SWF data
-                                rawData.bytes = bytes;
+                                rawData.Bytes = bytes;
 
                                 //Write SWF metadata
                                 if (matchingExport.FileRef.Game == MEGame.ME1 ||
@@ -1022,6 +1086,22 @@ namespace LegendaryExplorer.Tools.PackageEditor
             {
                 GoToNumber(clickedItem.Entry.UIndex);
             }
+        }
+
+        /// <summary>
+        /// Same as <see cref="entryDoubleClick"/>, but navigates to the TreeView first if you're on the names tab
+        /// Used in the "Find Usages of Name" list dialog
+        /// </summary>
+        /// <param name="clickedItem"></param>
+        private void entryDoubleClickToTreeview(EntryStringPair clickedItem)
+        {
+            if (CurrentView is CurrentViewMode.Names)
+            {
+                SearchHintText = "Object name";
+                GotoHintText = "UIndex";
+                CurrentView = CurrentViewMode.Tree;
+            }
+            entryDoubleClick(clickedItem);
         }
 
         private void PopoutCurrentView()
@@ -1290,37 +1370,74 @@ namespace LegendaryExplorer.Tools.PackageEditor
         {
             if (TreeEntryIsSelected())
             {
-                TreeViewEntry selected = (TreeViewEntry)LeftSide_TreeView.SelectedItem;
-
-                var itemsToTrash = selected.FlattenTree().OrderByDescending(x => x.UIndex)
-                    .Select(tvEntry => tvEntry.Entry);
-
+                var selected = (TreeViewEntry)LeftSide_TreeView.SelectedItem;
                 if (selected.Entry is IEntry ent && ent.FullPath.StartsWith(UnrealPackageFile.TrashPackageName))
                 {
                     MessageBox.Show("Cannot trash an already trashed item.");
                     return;
                 }
 
-                int parentEntry = selected.Entry.Parent?.UIndex ?? 0;
-
-                if (!GoToNumber(parentEntry))
+                BusyText = "Performing reference check...";
+                IsBusy = true;
+                Task.Run(() =>
                 {
-                    AllTreeViewNodesX[0].IsProgramaticallySelecting = true;
-                    SelectedItem = AllTreeViewNodesX[0];
-                }
 
-                bool removedFromLevel = selected.Entry is ExportEntry exp && exp.ParentName == "PersistentLevel" &&
-                                        exp.IsA("Actor") && Pcc.RemoveFromLevelActors(exp);
+                    List<IEntry> itemsToTrash = selected.FlattenTree().OrderByDescending(x => x.UIndex).Select(tvEntry => tvEntry.Entry).ToList();
+                    var itemsToTrashSet = new HashSet<IEntry>(itemsToTrash);
 
-                EntryPruner.TrashEntries(Pcc, itemsToTrash);
+                    IEntry entryWithReferences = itemsToTrash.FirstOrDefault(entry => entry.GetEntriesThatReferenceThisOne().Any(kvp =>
+                    {
+                        (IEntry referencedEntry, List<string> referenceDescriptors) = kvp;
 
-                if (removedFromLevel)
+                        //referenced from another entry that we are trashing, so it doesn't matter
+                        if (itemsToTrashSet.Contains(referencedEntry)) return false;
+
+                        //referenced from the level's actor list, which will be automatically cleaned up, so it doesn't matter
+                        if (referenceDescriptors.Count == 1 && referencedEntry.ClassName == "Level" && entry is ExportEntry exp && exp.IsA("Actor") && Pcc.LevelContainsActor(exp))
+                        {
+                            return false;
+                        }
+                        //dangerous reference detected!
+                        return true;
+                    }));
+                    return (itemsToTrash, entryWithReferences);
+                }).ContinueWithOnUIThread(prevTask =>
                 {
-                    MessageBox.Show(this, "Trashed and removed from level!");
-                }
+                    IsBusy = false;
+                    (List<IEntry> itemsToTrash, IEntry entryWithReferences) = prevTask.Result;
+                    if (entryWithReferences is not null)
+                    {
+                        MessageBoxResult messageBoxResult = MessageBox.Show(this,
+                            $"#{entryWithReferences.UIndex} {entryWithReferences.InstancedFullPath} is referenced by other entries! (Use the \"{FindReferencesMenuText}\" option in the context menu to see the references.)" +
+                            "These references will be broken if you trash it! Are you sure you want to proceed?",
+                            "Trash warning", MessageBoxButton.YesNo);
+                        if (messageBoxResult != MessageBoxResult.Yes)
+                        {
+                            return;
+                        }
+                    }
+                    int parentEntry = selected.Entry.Parent?.UIndex ?? 0;
+
+                    if (!GoToNumber(parentEntry))
+                    {
+                        AllTreeViewNodesX[0].IsProgramaticallySelecting = true;
+                        SelectedItem = AllTreeViewNodesX[0];
+                    }
+
+                    bool removedFromLevel = selected.Entry is ExportEntry { ParentName: "PersistentLevel" } exp && exp.IsA("Actor") && Pcc.RemoveFromLevelActors(exp);
+
+                    EntryPruner.TrashEntries(Pcc, itemsToTrash);
+
+                    if (removedFromLevel)
+                    {
+                        MessageBox.Show(this, "Trashed and removed from level!");
+                    }
+                });
             }
         }
-
+        
+        // ReSharper disable once MemberCanBePrivate.Global
+        public static string FindReferencesMenuText => "Find references";
         private void FindReferencesToObject()
         {
             if (TryGetSelectedEntry(out IEntry entry))
@@ -1437,7 +1554,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                                     $"#{kvp.Key.UIndex} {kvp.Key.ObjectName.Instanced}: {refName}"))).ToList(),
                             $"{prevTask.Result.Count} Objects that use '{name}'",
                             "There may be additional usages of this name in the unparsed binary of some objects", this)
-                    { DoubleClickEntryHandler = entryDoubleClick };
+                    { DoubleClickEntryHandler = entryDoubleClickToTreeview };
                     dlg.Show();
                 });
             }
@@ -1482,7 +1599,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                                 var props = exp.GetProperties();
                                 string dataPropName = exp.FileRef.Game != MEGame.ME1 ? "RawData" : "Data";
                                 var DataProp = props.GetProp<ImmutableByteArrayProperty>(dataPropName);
-                                byte[] data = DataProp.bytes;
+                                byte[] data = DataProp.Bytes;
 
                                 if (savePath == null)
                                 {
@@ -1617,7 +1734,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                                     string dataPropName = exp.FileRef.Game != MEGame.ME1 ? "RawData" : "Data";
                                     var rawData = props.GetProp<ImmutableByteArrayProperty>(dataPropName);
                                     //Write SWF data
-                                    rawData.bytes = bytes;
+                                    rawData.Bytes = bytes;
 
                                     //Write SWF metadata
                                     if (exp.FileRef.Game.IsGame1() || exp.FileRef.Game.IsGame2())
@@ -1913,46 +2030,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
                 return;
             }
 
-            var duplicates = new List<EntryStringPair>();
-            var duplicatesPackagePathIndexMapping = new Dictionary<string, List<int>>();
-            foreach (ExportEntry exp in Pcc.Exports)
-            {
-                string key = exp.InstancedFullPath;
-                if (key.StartsWith(UnrealPackageFile.TrashPackageName))
-                    continue; //Do not report these as requiring re-indexing.
-                if (!duplicatesPackagePathIndexMapping.TryGetValue(key, out List<int> indexList))
-                {
-                    indexList = new List<int>();
-                    duplicatesPackagePathIndexMapping[key] = indexList;
-                }
-                else
-                {
-                    duplicates.Add(new EntryStringPair(exp,
-                        $"{exp.UIndex} {exp.InstancedFullPath} has duplicate index (index value {exp.indexValue})"));
-                }
-
-                indexList.Add(exp.UIndex);
-            }
-
-            // IMPORTS TOO
-            foreach (ImportEntry imp in Pcc.Imports)
-            {
-                string key = imp.InstancedFullPath;
-                if (key.StartsWith(UnrealPackageFile.TrashPackageName))
-                    continue; //Do not report these as requiring re-indexing.
-                if (!duplicatesPackagePathIndexMapping.TryGetValue(key, out List<int> indexList))
-                {
-                    indexList = new List<int>();
-                    duplicatesPackagePathIndexMapping[key] = indexList;
-                }
-                else
-                {
-                    duplicates.Add(new EntryStringPair(imp,
-                        $"{imp.UIndex} {imp.InstancedFullPath} has duplicate index (index value {imp.indexValue})"));
-                }
-
-                indexList.Add(imp.UIndex);
-            }
+            var duplicates = EntryChecker.CheckForDuplicateIndices(Pcc);
 
             if (duplicates.Count > 0)
             {
@@ -2801,7 +2879,7 @@ namespace LegendaryExplorer.Tools.PackageEditor
             return false;
         }
 
-        public override void handleUpdate(List<PackageUpdate> updates)
+        public override void HandleUpdate(List<PackageUpdate> updates)
         {
             List<PackageChange> changes = updates.Select(x => x.Change).ToList();
             if (changes.Any(x => x.HasFlag(PackageChange.Name)))
@@ -3299,15 +3377,14 @@ namespace LegendaryExplorer.Tools.PackageEditor
             if (dropInfo.TargetItem is TreeViewEntry targetItem && dropInfo.Data is TreeViewEntry sourceItem &&
                 sourceItem.Parent != null)
             {
-                //if (targetItem.Entry != null && sourceItem.Entry != null &&
-                //    ////!App.IsDebug &&
-                //    sourceItem.Entry.Game != MEGame.UDK && // allow UDK -> OT and LE
-                //    targetItem.Game.IsLEGame() != sourceItem.Entry.Game.IsLEGame())
-                //{
-                //    MessageBox.Show(
-                //        "Cannot port assets between Original Trilogy (OT) games and  Legendary Edition (LE) games at this time.", "Cannot port asset", MessageBoxButton.OK, MessageBoxImage.Error);
-                //    return;
-                //}
+                if (targetItem.Game.IsLEGame() != sourceItem.Game.IsLEGame() &&
+                    !App.IsDebug && 
+                    sourceItem.Entry.Game != MEGame.UDK) // allow UDK -> OT and LE)
+                {
+                    MessageBox.Show(
+                        "Cannot port assets between Original Trilogy (OT) games and Legendary Edition (LE) games in release builds of Legendary Explorer.", "Cannot port asset", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
 
                 //Check if the path of the target and the source is the same. If so, offer to merge instead
                 if (sourceItem == targetItem || (targetItem.Entry != null && sourceItem.Entry.FileRef == targetItem.Entry.FileRef))
@@ -3330,8 +3407,6 @@ namespace LegendaryExplorer.Tools.PackageEditor
 
                 IEntry sourceEntry = sourceItem.Entry;
                 IEntry targetLinkEntry = targetItem.Entry;
-
-
 
                 int originalIndex = -1;
                 bool hadChanges = false;
@@ -3377,7 +3452,8 @@ namespace LegendaryExplorer.Tools.PackageEditor
                     TargetGameDonorDB = objectDB,
                     Cache = null, // Disable cache as we want to pull from open files in LEX. Will reduce performance
                     ImportExportDependencies = portingOption.PortingOptionChosen is EntryImporter.PortingOption.CloneAllDependencies
-                        or EntryImporter.PortingOption.ReplaceSingularWithRelink
+                        or EntryImporter.PortingOption.ReplaceSingularWithRelink,
+                    GenerateImportsForGlobalFiles = portingOption.PortGlobalsAsImports
                 };
 
                 var relinkResults = EntryImporter.ImportAndRelinkEntries(portingOption.PortingOptionChosen, sourceEntry, Pcc,

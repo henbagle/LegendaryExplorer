@@ -654,6 +654,11 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
             PackageEditorExperimentsM.ResetTexturesInFile(GetPEWindow().Pcc, GetPEWindow());
         }
 
+        private void CramLevelFullOfEverything_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsM.CramLevelFullOfStuff(GetPEWindow().Pcc, GetPEWindow());
+        }
+
         private void ResetVanillaPackagePart_Click(object sender, RoutedEventArgs e)
         {
             PackageEditorExperimentsM.ResetPackageVanillaPart(GetPEWindow().Pcc, GetPEWindow());
@@ -1317,6 +1322,16 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         private void AddPresetGestureTrack2_Click(object sender, RoutedEventArgs e)
         {
             PackageEditorExperimentsO.AddPresetTrack("Gesture2", GetPEWindow());
+        }
+
+        private void BatchPatchMaterialsParameters_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsO.BatchPatchMaterialsParameters(GetPEWindow());
+        }
+
+        private void BatchSetBoolPropVal_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsO.BatchSetBoolPropVal(GetPEWindow());
         }
         #endregion
 

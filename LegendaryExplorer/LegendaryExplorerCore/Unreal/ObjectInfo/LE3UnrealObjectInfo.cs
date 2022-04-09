@@ -283,7 +283,7 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                 case PropertyType.FloatProperty:
                     return new FloatProperty(0f, propName);
                 case PropertyType.DelegateProperty:
-                    return new DelegateProperty(0, "None");
+                    return new DelegateProperty("None", 0);
                 case PropertyType.ObjectProperty:
                     return new ObjectProperty(0, propName);
                 case PropertyType.NameProperty:
@@ -351,6 +351,8 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
             foreach (string filePath in allFiles)
             {
                 using IMEPackage pcc = MEPackageHandler.OpenLE3Package(filePath);
+                if (pcc.Localization != MELocalization.None && pcc.Localization != MELocalization.INT)
+                    continue; // DO NOT LOOK AT NON-INT AS SOME GAMES WILL BE MISSING THESE FILES (due to backup/storage)
                 for (int i = 1; i <= pcc.ExportCount; i++)
                 {
                     ExportEntry exportEntry = pcc.GetUExport(i);
@@ -380,6 +382,8 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
             foreach (string filePath in allFiles)
             {
                 using IMEPackage pcc = MEPackageHandler.OpenLE3Package(filePath);
+                if (pcc.Localization != MELocalization.None && pcc.Localization != MELocalization.INT)
+                    continue; // DO NOT LOOK AT NON-INT AS SOME GAMES WILL BE MISSING THESE FILES (due to backup/storage)
                 foreach (ExportEntry exportEntry in pcc.Exports)
                 {
                     if (exportEntry.IsA("SequenceObject"))
@@ -552,7 +556,12 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                 properties =
                 {
                     new KeyValuePair<NameReference, PropertyInfo>("m_aoTargets", new PropertyInfo(PropertyType.ArrayProperty, "Actor")),
-                    new KeyValuePair<NameReference, PropertyInfo>("bAutoLookAtPlayer", new PropertyInfo(PropertyType.BoolProperty))
+                    new KeyValuePair<NameReference, PropertyInfo>("bAutoLookAtPlayer", new PropertyInfo(PropertyType.BoolProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("NoticeEnableDistance", new PropertyInfo(PropertyType.FloatProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("NoticeDisableDistance", new PropertyInfo(PropertyType.FloatProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("ReNoticeMinTime", new PropertyInfo(PropertyType.IntProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("ReNoticeMaxTime", new PropertyInfo(PropertyType.IntProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("NoticeDuration", new PropertyInfo(PropertyType.FloatProperty))
                 }
             };
             sequenceObjects["SFXSeqAct_SetAutoLookAtPlayer"] = new SequenceObjectInfo
@@ -665,6 +674,20 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
             {
                 ObjInstanceVersion = 1
             };
+            classes["SFXSeqAct_AwardWeaponByName"] = new ClassInfo
+            {
+                baseClass = "SequenceAction",
+                //pccPath = GlobalUnrealObjectInfo.Me3ExplorerCustomNativeAdditionsName,
+                //exportIndex = 0, not in LE3Resources.pcc
+                properties =
+                {
+                    new KeyValuePair<NameReference, PropertyInfo>("WeaponClassName", new PropertyInfo(PropertyType.NameProperty))
+                }
+            };
+            sequenceObjects["SFXSeqAct_AwardWeaponByName"] = new SequenceObjectInfo
+            {
+                ObjInstanceVersion = 1
+            };
 
             //Kinkojiro - New GM Classes - only used in EGM
             classes["SFXClusterEGM"] = new ClassInfo
@@ -680,7 +703,9 @@ namespace LegendaryExplorerCore.Unreal.ObjectInfo
                 baseClass = "SFXSystem",
                 properties =
                 {
-                    new KeyValuePair<NameReference, PropertyInfo>("m_bCerberusSystem", new PropertyInfo(PropertyType.BoolProperty))
+                    new KeyValuePair<NameReference, PropertyInfo>("m_bCerberusSystem", new PropertyInfo(PropertyType.BoolProperty)),
+                    new KeyValuePair<NameReference, PropertyInfo>("ShipChasePlayEvent", new PropertyInfo(PropertyType.ObjectProperty, "WwiseEvent")),
+                    new KeyValuePair<NameReference, PropertyInfo>("ShipChaseStopEvent", new PropertyInfo(PropertyType.ObjectProperty, "WwiseEvent"))
                 }
             };
             classes["SFXPlanet_Invaded"] = new ClassInfo
