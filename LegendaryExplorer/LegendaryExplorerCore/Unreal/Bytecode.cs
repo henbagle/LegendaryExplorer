@@ -885,6 +885,10 @@ namespace LegendaryExplorerCore.Unreal
                         var innerTok = ReadToken(start + 1, export);
                         newTok.text = "GotoLabel: " + innerTok.text;
                         newTok.stop = false;
+                        // 06/19/2022 - Copy the inner token inPackageReferences list
+                        // so it relinks the token name, since this just discards it it seems.
+                        // - Mgamerz
+                        newTok.inPackageReferences = innerTok.inPackageReferences;
                         newTok.raw = memory.Slice(start, 1 + innerTok.raw.Length);
                         //newTok.raw = start+ + newTok
                         end = start + 1 + innerTok.raw.Length;
@@ -4289,10 +4293,12 @@ namespace LegendaryExplorerCore.Unreal
             return t;
         }
 
+        public const string IterNextText = "//foreach continue";
+        public const string IterPopText = "//foreach end";
         private Token ReadIterNext(int start, ExportEntry export)
         {
             Token t = new Token();
-            t.text = "\\\\foreach continue";
+            t.text = IterNextText;
             t.raw = new byte[1];
             t.raw[0] = memory[start];
             return t;
@@ -4301,7 +4307,7 @@ namespace LegendaryExplorerCore.Unreal
         private Token ReadIterPop(int start, ExportEntry export)
         {
             Token t = new Token();
-            t.text = "\\\\foreach pop";
+            t.text = IterPopText;
             t.raw = new byte[1];
             t.raw[0] = memory[start];
             return t;
@@ -4834,10 +4840,12 @@ namespace LegendaryExplorerCore.Unreal
             return t;
         }
 
+        public const string ReturnText = "Return (";
+
         private Token ReadReturn(int start, ExportEntry export)
         {
             Token t = new Token();
-            t.text = "Return (";
+            t.text = ReturnText;
             Token a = ReadToken(start + 1, export);
             t.inPackageReferences.AddRange(a.inPackageReferences);
 

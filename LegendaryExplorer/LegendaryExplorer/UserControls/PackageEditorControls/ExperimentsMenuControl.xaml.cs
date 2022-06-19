@@ -1086,7 +1086,7 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
                         EnumerateChildNetIndexes(funcbin.Children);
                         EnumerateChildNetIndexes(funcbin.Next);
                     }
-                    else if(childbin is UState statebin)
+                    else if (childbin is UState statebin)
                     {
                         EnumerateChildNetIndexes(statebin.Children);
                         EnumerateChildNetIndexes(statebin.Next);
@@ -1333,6 +1333,26 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsO.BatchSetBoolPropVal(GetPEWindow());
         }
+
+        private void Baldinator_Click(object sender, RoutedEventArgs a)
+        {
+            PackageEditorExperimentsO.Baldinator(GetPEWindow());
+        }
+
+        private void CopyProperty_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsO.CopyProperty(GetPEWindow());
+        }
+
+        private void CopyMatToBMOorMIC_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsO.CopyMatToBMOorMIC(GetPEWindow());
+        }
+
+        private void SMRefRemover_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsO.SMRefRemover(GetPEWindow());
+        }
         #endregion
 
         // EXPERIMENTS: CHONKY DB---------------------------------------------------------
@@ -1345,6 +1365,26 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         private void ChonkyDB_BuildME1GameDB(object sender, RoutedEventArgs e)
         {
             PackageEditorExperimentsM.BuildAllObjectsGameDB(MEGame.ME1, GetPEWindow());
+        }
+
+        private void ChonkyDB_BuildLE2GameDB(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsM.BuildAllObjectsGameDB(MEGame.LE2, GetPEWindow());
+        }
+
+        private void ChonkyDB_BuildME2GameDB(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsM.BuildAllObjectsGameDB(MEGame.ME2, GetPEWindow());
+        }
+
+        private void ChonkyDB_BuildLE3GameDB(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsM.BuildAllObjectsGameDB(MEGame.LE3, GetPEWindow());
+        }
+
+        private void ChonkyDB_BuildME3GameDB(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsM.BuildAllObjectsGameDB(MEGame.ME3, GetPEWindow());
         }
 
         // PLEASE MOVE YOUR EXPERIMENT HANDLER INTO YOUR SECTION ABOVE

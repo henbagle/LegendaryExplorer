@@ -178,15 +178,31 @@ namespace LegendaryExplorerCore.UnrealScript
             _ => throw new ArgumentOutOfRangeException(nameof(game))
         };
 
+        public static IEnumerable<string> PackagesWithTopLevelClasses(MEGame game)
+        {
+            var basefiles = BaseFileNames(game);
+            if (game is MEGame.LE1)
+            {
+                return basefiles.Concat(new[] { "SFXGameContent_Powers.pcc", "SFXVehicleResources.pcc", "SFXWorldResources.pcc" });
+            }
+            return basefiles;
+        }
+
         [Obsolete("Filelib architecture has changed, and this no longer does anything.")]
         public static void FreeLibs() { }
 
         //only use from within _initializationLock!
         private bool InternalInitialize(PackageCache packageCache, string gameRootPath = null, bool canUseCache = true)
         {
+            bool packageCacheIsLocal = false;
             try
             {
-                LECLog.Information($@"Game Root Path for FileLib Init: {gameRootPath ?? "null"}. Has package cache: {packageCache != null}");
+                if (packageCache == null)
+                {
+                    packageCache = new PackageCache{AlwaysOpenFromDisk = false};
+                    packageCacheIsLocal = true;
+                }
+                LECLog.Information($@"Game Root Path for FileLib Init: {gameRootPath ?? "null"}. Has package cache: {!packageCacheIsLocal}");
                 InitializationLog = new MessageLog();
                 _cacheEnabled = false; // defaults to false, can be enabled if init works.
                 _baseSymbols = null;
@@ -202,7 +218,7 @@ namespace LegendaryExplorerCore.UnrealScript
                 {
                     if (gameFiles.TryGetValue(fileName, out string path) && File.Exists(path))
                     {
-                        using var pcc = MEPackageHandler.OpenMEPackage(path);
+                        IMEPackage pcc = packageCache.GetCachedPackage(path, true);
                         if (!ResolveAllClassesInPackage(pcc, ref _baseSymbols, InitializationLog, packageCache))
                         {
                             return false;
@@ -218,32 +234,32 @@ namespace LegendaryExplorerCore.UnrealScript
                     var associatedFiles = EntryImporter.GetPossibleAssociatedFiles(Pcc, includeNonBioPRelated: false);
                     if (Pcc.Game is MEGame.ME3)
                     {
-                        if (Pcc.FindEntry("SFXGameMPContent") is IEntry { ClassName: "Package" } && !associatedFiles.Contains("BIOP_MP_COMMON.pcc"))
+                        if (Pcc.FindEntry("SFXGameMPContent") is { ClassName: "Package" } && !associatedFiles.Contains("BIOP_MP_COMMON.pcc"))
                         {
                             associatedFiles.Add("BIOP_MP_COMMON.pcc");
                         }
-                        if (Pcc.FindEntry("SFXGameContentDLC_CON_MP2") is IEntry { ClassName: "Package" })
+                        if (Pcc.FindEntry("SFXGameContentDLC_CON_MP2") is { ClassName: "Package" })
                         {
                             associatedFiles.Add("Startup_DLC_CON_MP2_INT.pcc");
                         }
-                        if (Pcc.FindEntry("SFXGameContentDLC_CON_MP3") is IEntry { ClassName: "Package" })
+                        if (Pcc.FindEntry("SFXGameContentDLC_CON_MP3") is { ClassName: "Package" })
                         {
                             associatedFiles.Add("Startup_DLC_CON_MP3_INT.pcc");
                         }
-                        if (Pcc.FindEntry("SFXGameContentDLC_CON_MP4") is IEntry { ClassName: "Package" })
+                        if (Pcc.FindEntry("SFXGameContentDLC_CON_MP4") is { ClassName: "Package" })
                         {
                             associatedFiles.Add("Startup_DLC_CON_MP4_INT.pcc");
                         }
-                        if (Pcc.FindEntry("SFXGameContentDLC_CON_MP5") is IEntry { ClassName: "Package" })
+                        if (Pcc.FindEntry("SFXGameContentDLC_CON_MP5") is { ClassName: "Package" })
                         {
                             associatedFiles.Add("Startup_DLC_CON_MP5_INT.pcc");
                         }
                     }
-                    foreach (var fileName in Enumerable.Reverse(associatedFiles))
+                    foreach (string fileName in Enumerable.Reverse(associatedFiles))
                     {
                         if (gameFiles.TryGetValue(fileName, out string path) && File.Exists(path))
                         {
-                            using var pcc = MEPackageHandler.OpenMEPackage(path);
+                            IMEPackage pcc = packageCache.GetCachedPackage(path, true);
                             if (!ResolveAllClassesInPackage(pcc, ref _baseSymbols, InitializationLog, packageCache))
                             {
                                 return false;
@@ -253,10 +269,19 @@ namespace LegendaryExplorerCore.UnrealScript
                 }
                 _symbols = _baseSymbols?.Clone();
                 _cacheEnabled = canUseCache;
-                return ResolveAllClassesInPackage(Pcc, ref _symbols, InitializationLog, packageCache);
+                bool hadError = ResolveAllClassesInPackage(Pcc, ref _symbols, InitializationLog, packageCache);
+                if (packageCacheIsLocal)
+                {
+                    packageCache.Dispose();
+                }
+                return hadError;
             }
             catch when (!LegendaryExplorerCoreLib.IsDebug)
             {
+                if (packageCacheIsLocal)
+                {
+                    packageCache.Dispose();
+                }
                 return false;
             }
         }
@@ -419,17 +444,24 @@ namespace LegendaryExplorerCore.UnrealScript
                 }
                 if (classOverride is not null)
                 {
+                    if (symbols.TryGetType(classOverride.Name, out Class existingClass))
+                    {
+                        log.CurrentClass = classOverride;
+                        log.LogError($"A class named '{existingClass.Name}' already exists: #{existingClass.UIndex} in {existingClass.FilePath}");
+                        return false;
+                    }
                     classes.Add(classOverride, "");
                 }
                 LECLog.Debug($"{fileName}: Finished parse.");
-                foreach (var validationPass in Enums.GetValues<ValidationPass>())
+                var validator = new ClassValidationVisitor(log, symbols, ValidationPass.ClassAndStructMembersAndFunctionParams);
+                foreach (ValidationPass validationPass in Enums.GetValues<ValidationPass>())
                 {
                     foreach ((Class cls, string scriptText) in classes)
                     {
                         log.CurrentClass = cls;
                         try
                         {
-                            var validator = new ClassValidationVisitor(log, symbols, validationPass);
+                            validator.Pass = validationPass;
                             cls.AcceptVisitor(validator);
                             if (log.HasErrors)
                             {
@@ -446,7 +478,7 @@ namespace LegendaryExplorerCore.UnrealScript
                     }
                     LECLog.Debug($"{fileName}: Finished validation pass {validationPass}.");
                 }
-
+                log.CurrentClass = null;
                 switch (fileName)
                 {
                     case "Core" when pcc.Game.IsGame3():

@@ -15,6 +15,7 @@ using LegendaryExplorerCore.GameFilesystem;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Misc;
 using LegendaryExplorerCore.Packages;
+using LegendaryExplorerCore.Textures;
 using LegendaryExplorerCore.Unreal;
 using LegendaryExplorerCore.Unreal.BinaryConverters;
 using LibVLCSharp.Shared;
@@ -103,8 +104,8 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
             set => SetValue(ViewerModeOnlyProperty, value);
         }
 
-        private int _movieCRC;
-        public int MovieCRC
+        private uint _movieCRC;
+        public uint MovieCRC
         {
             get => _movieCRC;
             set => SetProperty(ref _movieCRC, value);
@@ -267,7 +268,7 @@ namespace LegendaryExplorer.UserControls.ExportLoaderControls
                     var movieBytes = GetMovieBytes();
                     if (movieBytes != null)
                     {
-                        MovieCRC = ~ParallelCRC.Compute(movieBytes);
+                        MovieCRC = TextureCRC.Compute(movieBytes);
                         IsBink1 = movieBytes[0] == 'B';
                     }
                     else
