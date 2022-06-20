@@ -10,6 +10,7 @@ using System.Xml;
 using LegendaryExplorer.Dialogs;
 using LegendaryExplorer.Misc;
 using LegendaryExplorerCore.GameFilesystem;
+using LegendaryExplorerCore.Gammtek.Extensions.Collections.Generic;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Kismet;
 using LegendaryExplorerCore.Misc;
@@ -793,6 +794,55 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 "hench_krogan" => 164529,
                 "hench_asari" => 149285,
                 "hench_quarian" => 164533
+            };
+        }
+
+        public static void FixAshKaidanConvos(PackageEditorWindow pew)
+        {
+            IMEPackage Pcc = pew.Pcc;
+            bool isAsh = false;
+            ExportEntry convo = Pcc.FindExport("cha00_humanmale_kaidan_d.cha00_humanmale_kaidan_dlg");
+            if (convo is null)
+            {
+                convo = Pcc.FindExport("cha00_humanfemale_ashley_d.cha00_humanfemale_ashley_dlg");
+                isAsh = true;
+            }
+
+            HashSet<int> badEntries = GetBadNodes(false, isAsh);
+            HashSet<int> badReplies =GetBadNodes(true, isAsh);
+            if (convo is null || convo.ClassName != "BioConversation") return;
+            var props = convo.GetProperties();
+            var entries = props.GetProp<ArrayProperty<StructProperty>>("m_EntryList");
+            var replies = props.GetProp<ArrayProperty<StructProperty>>("m_ReplyList");
+
+            foreach (var reply in replies)
+            {
+                var entryList = reply.GetProp<ArrayProperty<IntProperty>>("EntryList");
+                var newEntryList = entryList.Where((prop) => !badEntries.Contains(prop.Value)).ToList();
+                if (newEntryList.Count != entryList.Count)
+                {
+                    reply.Properties.AddOrReplaceProp(new ArrayProperty<IntProperty>(newEntryList, "EntryList"));
+                }
+            }
+            foreach (var entry in entries)
+            {
+                var entryList = entry.GetProp<ArrayProperty<StructProperty>>("ReplyListNew");
+                var newEntryList = entryList.Where((prop) => !badReplies.Contains(prop.GetProp<IntProperty>("nIndex")?.Value ?? 0)).ToList();
+                if (newEntryList.Count != entryList.Count)
+                {
+                    entry.Properties.AddOrReplaceProp(new ArrayProperty<StructProperty>(newEntryList, "ReplyListNew"));
+                }
+            }
+            props.AddOrReplaceProp(entries);
+            props.AddOrReplaceProp(replies);
+            convo.WriteProperties(props);
+
+            HashSet<int> GetBadNodes(bool isReplies, bool isAsh) => (isReplies, isAsh) switch
+            {
+                (true, true) => new HashSet<int>(new[] {85, 357}),
+                (false, true) => new HashSet<int>(new[] {88, 172, 175, 184, 245, 286, 380}),
+                (true, false) => new HashSet<int>(new[] {104, 108}),
+                (false, false) => new HashSet<int>(new[] {109, 136, 266}),
             };
         }
     }

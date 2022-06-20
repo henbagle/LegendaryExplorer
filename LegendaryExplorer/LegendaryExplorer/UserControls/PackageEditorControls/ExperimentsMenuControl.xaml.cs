@@ -1290,6 +1290,11 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsH.MakoBanter(GetPEWindow());
         }
+
+        private void AshKaidanSwamp_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.FixAshKaidanConvos(GetPEWindow());
+        }
         #endregion
 
         // EXPERIMENTS: OTHER PEOPLE ------------------------------------------------------------
