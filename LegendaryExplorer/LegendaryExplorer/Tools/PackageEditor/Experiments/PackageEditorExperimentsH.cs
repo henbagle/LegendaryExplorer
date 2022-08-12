@@ -845,5 +845,34 @@ namespace LegendaryExplorer.Tools.PackageEditor.Experiments
                 (false, false) => new HashSet<int>(new[] {109, 136, 266}),
             };
         }
+
+        public static void FixFerosTransitions(PackageEditorWindow pew)
+        {
+            string searchDir = "";
+            CommonOpenFileDialog d = new CommonOpenFileDialog { Title = "Select folder to apply to", IsFolderPicker = true};
+            if (d.ShowDialog() == CommonFileDialogResult.Ok)
+            {
+                searchDir = d.FileName;
+            }
+            FileInfo[] files = new DirectoryInfo(searchDir)
+                .EnumerateFiles("*", SearchOption.AllDirectories)
+                .Where(f => f.Extension.ToLower() == ".pcc")
+                .ToArray();
+            var entryIndexes = new int[] {50, 51, 52, 53, 54};
+            foreach (var file in files)
+            {
+                using var pcc = MEPackageHandler.OpenMEPackage(file.FullName);
+                var convo = pcc.FindExport("war20_trigger_D.war20_trigger_dlg");
+                var props = convo.GetProperties();
+                var entries = props.GetProp<ArrayProperty<StructProperty>>("m_EntryList");
+                foreach (var id in entryIndexes)
+                {
+                    entries[id].Properties.AddOrReplaceProp(new IntProperty(-1, "nStateTransition"));
+                }
+                props.AddOrReplaceProp(entries);
+                convo.WriteProperties(props);
+                pcc.Save();
+            }
+        }
     }
 }

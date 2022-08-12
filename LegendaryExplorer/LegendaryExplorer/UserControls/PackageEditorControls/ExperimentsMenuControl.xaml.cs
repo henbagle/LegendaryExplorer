@@ -1295,6 +1295,11 @@ namespace LegendaryExplorer.UserControls.PackageEditorControls
         {
             PackageEditorExperimentsH.FixAshKaidanConvos(GetPEWindow());
         }
+
+        private void FerosSquadmate_Click(object sender, RoutedEventArgs e)
+        {
+            PackageEditorExperimentsH.FixFerosTransitions(GetPEWindow());
+        }
         #endregion
 
         // EXPERIMENTS: OTHER PEOPLE ------------------------------------------------------------

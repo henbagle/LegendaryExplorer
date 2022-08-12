@@ -155,6 +155,7 @@
         <MenuItem Header="Copy DecalActors" Click="CopyDecalActors_Click"/>
         <MenuItem Header="Fix squadmate banter for Mako" Click="MakoBanter_Click"/>
         <MenuItem Header="Fix Ash/Kaidan swamp convo" Click="AshKaidanSwamp_Click"/>
+        <MenuItem Header="Fix therum squadmate transitions" Click="FerosSquadmate_Click"/>
     </MenuItem>
     <MenuItem Header="Other people's box of Legos">
         <MenuItem Header="Export level to T3D" Click="ExportLevelToT3D_Click"/>
