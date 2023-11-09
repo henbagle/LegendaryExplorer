@@ -1,15 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using LegendaryExplorerCore.Helpers;
+﻿using System.IO;
 using LegendaryExplorerCore.Packages;
 using LegendaryExplorerCore.Packages.CloningImportingAndRelinking;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.IntegrationTests
 {
     /// <summary>
     /// Tests the relinker system. Due to the complexity of this, it's unlikely we will ever

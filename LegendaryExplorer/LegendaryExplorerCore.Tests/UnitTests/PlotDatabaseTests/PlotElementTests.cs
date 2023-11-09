@@ -1,9 +1,7 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using LegendaryExplorerCore.Helpers;
-using LegendaryExplorerCore.PlotDatabase;
-using LegendaryExplorerCore.PlotDatabase.PlotElements;
+﻿using LegendaryExplorerCore.PlotDatabase.PlotElements;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.UnitTests.PlotDatabaseTests
 {
     [TestClass]
     public class PlotElementTests

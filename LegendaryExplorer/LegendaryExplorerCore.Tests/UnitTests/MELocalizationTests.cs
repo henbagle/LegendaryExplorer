@@ -1,20 +1,15 @@
-﻿using LegendaryExplorerCore.Packages;
+﻿using System.Collections.Generic;
+using LegendaryExplorerCore.Packages;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.UnitTests
 {
     [TestClass]
-    public class ExtensionTests
+    public class MELocalizationTests
     {
         [TestMethod]
-        public void TestUnrealLocalizationTests()
+        public void GetUnrealLocalization_ReturnsCorrectValue()
         {
-            // Test GetLocalization()
             Dictionary<string, MELocalization> testData = new Dictionary<string, MELocalization>()
             {
                 { "Startup_INT", MELocalization.INT },
@@ -37,7 +32,11 @@ namespace LegendaryExplorerCore.Tests
                 Assert.AreEqual(v.Value, v.Key.GetUnrealLocalization(), $@"GetUnrealLocalization() returned the wrong localization! Input: {v.Key}");
             }
 
-            // Test StripLocalization()
+        }
+
+        [TestMethod]
+        public void StripUnrealLocalization_StripsLocaleCode()
+        {
             Dictionary<string, string> testStrings = new Dictionary<string, string>()
             {
                 { "HerpAFlerpFlerp_LOC_DEU_LOC_FRA_RUS", "HerpAFlerpFlerp_LOC_DEU_LOC_FRA" },
@@ -49,16 +48,18 @@ namespace LegendaryExplorerCore.Tests
                 { "BioD_Level1_200_LOC_INT", "BioD_Level1_200" },
                 { "C:\\Users\\OhNo.pcc", "C:\\Users\\OhNo.pcc" },
                 { "C:\\Users\\OhNo_LOC_DEU.pcc", "C:\\Users\\OhNo.pcc" },
-                { "C:\\Users\\OhNo_LOC_LOC_Gulp.pcc", "C:\\Users\\OhNo_LOC_LOC_Gulp.pcc" }, // Technically the game would not do this, since there's like 50 actual 'supported' language codes, but we don't know all of them...
+                {
+                    "C:\\Users\\OhNo_LOC_LOC_Gulp.pcc", "C:\\Users\\OhNo_LOC_LOC_Gulp.pcc"
+                }, // Technically the game would not do this, since there's like 50 actual 'supported' language codes, but we don't know all of them...
                 { "C:\\Users\\OhNo_FR.pcc", "C:\\Users\\OhNo.pcc" },
                 { "C:\\Users\\OhNo_GE.ini", "C:\\Users\\OhNo.ini" },
             };
 
             foreach (var v in testStrings)
             {
-                Assert.AreEqual(v.Value, v.Key.StripUnrealLocalization(), $@"StripUnrealLocalization() returned the wrong stripped string! Input: {v.Key}");
+                Assert.AreEqual(v.Value, v.Key.StripUnrealLocalization(),
+                    $@"StripUnrealLocalization() returned the wrong stripped string! Input: {v.Key}");
             }
-
         }
     }
 }

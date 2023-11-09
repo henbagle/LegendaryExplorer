@@ -1,21 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
+﻿using System.IO;
 using LegendaryExplorerCore.Helpers;
-using LegendaryExplorerCore.PlotDatabase;
 using LegendaryExplorerCore.PlotDatabase.Serialization;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.UnitTests.PlotDatabaseTests
 {
     [TestClass]
     public class PlotDBDeserializationTests
     {
         [TestMethod]
-        public void TestDBSerialization()
+        public void SerializedPlotDatabase_LoadsBiowarePlotDBWithoutErrors()
         {
             GlobalTest.Init();
             var le1File =

@@ -1,14 +1,11 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Linq;
-using LegendaryExplorerCore.DebugTools;
 using LegendaryExplorerCore.GameFilesystem;
 using LegendaryExplorerCore.Packages;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.IntegrationTests
 {
     [TestClass]
     public class MountTests

@@ -1,16 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using LegendaryExplorerCore.Dialogue;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Packages;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.IntegrationTests
 {
     [TestClass]
     public class BioConversationTests

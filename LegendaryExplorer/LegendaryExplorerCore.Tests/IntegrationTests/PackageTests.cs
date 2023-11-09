@@ -12,7 +12,7 @@ using LegendaryExplorerCore.Unreal.ObjectInfo;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using static LegendaryExplorerCore.Unreal.UnrealFlags;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.IntegrationTests
 {
     [TestClass]
     public class PackageTests

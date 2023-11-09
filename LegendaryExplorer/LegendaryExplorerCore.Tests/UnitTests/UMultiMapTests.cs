@@ -3,10 +3,10 @@ using System.Linq;
 using LegendaryExplorerCore.Unreal.Collections;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace LegendaryExplorerCore.Tests;
+namespace LegendaryExplorerCore.Tests.UnitTests;
 
 [TestClass]
-public class CollectionTests
+public class UMultiMapTests
 {
     [TestMethod]
     public void TestUMultiMap()

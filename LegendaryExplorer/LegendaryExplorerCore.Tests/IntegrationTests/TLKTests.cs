@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using LegendaryExplorerCore.Helpers;
 using LegendaryExplorerCore.Packages;
 using LegendaryExplorerCore.TLK;
@@ -11,7 +9,7 @@ using LegendaryExplorerCore.TLK.ME1;
 using LegendaryExplorerCore.TLK.ME2ME3;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.IntegrationTests
 {
     [TestClass]
     public class TLKTests

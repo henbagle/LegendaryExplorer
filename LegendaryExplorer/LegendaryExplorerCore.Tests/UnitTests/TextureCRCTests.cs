@@ -4,13 +4,13 @@ using System.IO.Hashing;
 using LegendaryExplorerCore.Textures;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.UnitTests
 {
     [TestClass]
-    public class CRCTests
+    public class TextureCRCTests
     {
         [TestMethod]
-        public void TestTextureCRC()
+        public void Compute_CRC32MatchesSystemResult()
         {
             GlobalTest.Init();
 

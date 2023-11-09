@@ -1,10 +1,9 @@
 ﻿using System;
-using LegendaryExplorerCore.PlotDatabase;
 using LegendaryExplorerCore.PlotDatabase.Databases;
 using LegendaryExplorerCore.PlotDatabase.PlotElements;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace LegendaryExplorerCore.Tests
+namespace LegendaryExplorerCore.Tests.UnitTests.PlotDatabaseTests
 {
     /// <summary>
     /// An implementation of PlotDatabaseBase used for testing the base class
