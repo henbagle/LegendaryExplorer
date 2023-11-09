@@ -18,7 +18,13 @@ namespace LegendaryExplorerCore.Tests.UnitTests.PlotDatabaseTests
     [TestClass]
     public class PlotDatabaseBaseTests
     {
-        private PlotDatabaseBase plotDb;
+        private PlotDatabaseBase _plotDb;
+        private PlotElement _category;
+        private PlotBool _bool;
+        private PlotConditional _conditional;
+        private PlotElement _integer;
+        private PlotElement _float;
+        private PlotTransition _transition;
 
         [TestInitialize]
         public void Setup()
@@ -28,67 +34,145 @@ namespace LegendaryExplorerCore.Tests.UnitTests.PlotDatabaseTests
             pdb.SetRoot(root);
             pdb.Organizational.Add(1, root);
 
-            plotDb = pdb;
+            _plotDb = pdb;
+            
+            
+            _category = new PlotElement(0, 2, "Category", PlotElementType.Category, null);
+            _bool = new PlotBool(1, 3, "Bool", PlotElementType.State, null);
+            _conditional = new PlotConditional(1, 4, "Conditional", PlotElementType.Conditional, _bool);
+            _integer = new PlotElement(2, 5, "Integer", PlotElementType.Integer, null);
+            _float = new PlotElement(3, 6, "Float", PlotElementType.Float, null);
+            _transition = new PlotTransition(4, 7, "Transition", PlotElementType.Transition, null);
+        }
+
+        private void AddAllTestElementsToDb()
+        {
+            _plotDb.AddElement(_category, _plotDb.Root);
+            _plotDb.AddElement(_bool, _plotDb.Root);
+            _plotDb.AddElement(_conditional, _bool);
+            _plotDb.AddElement(_float, _bool);
+            _plotDb.AddElement(_transition, _bool);
+            _plotDb.AddElement(_integer, _bool);
         }
 
 
         [TestMethod]
-        public void TestElementAdd()
+        public void AddElement_ElementsGoInCorrectCategories()
         {
-            var a = new PlotElement(0, 2, "Category", PlotElementType.Category, null);
-            var b = new PlotBool(1, 3, "Bool", PlotElementType.State, null);
-            var c = new PlotConditional(1, 4, "Conditional", PlotElementType.Conditional, b);
+            AddAllTestElementsToDb();
+            
+            Assert.IsTrue(_category.Parent == _plotDb.Root);
+            Assert.IsTrue(_plotDb.Organizational.ContainsValue(_category));
+            Assert.IsTrue(_plotDb.Organizational.ContainsKey(_category.ElementId));
 
-            plotDb.AddElement(a, plotDb.Root);
-            Assert.IsTrue(a.Parent == plotDb.Root);
-            Assert.IsTrue(plotDb.Organizational.ContainsValue(a));
-            Assert.IsTrue(plotDb.Organizational.ContainsKey(a.ElementId));
+            Assert.IsTrue(_plotDb.Bools.ContainsValue(_bool));
+            Assert.IsTrue(_plotDb.Bools.ContainsKey(_bool.PlotId));
+            
+            Assert.IsTrue(_plotDb.Conditionals.ContainsValue(_conditional));
+            Assert.IsTrue(_plotDb.Conditionals.ContainsKey(_conditional.PlotId));
 
-            // Null parent throws exception when element doesn't have parent
-            Assert.ThrowsException<Exception>(() => plotDb.AddElement(b, null));
+            Assert.IsTrue(_plotDb.Ints.ContainsValue(_integer));
+            Assert.IsTrue(_plotDb.Ints.ContainsKey(_integer.PlotId));
 
-            plotDb.AddElement(b, a);
-            Assert.IsTrue(plotDb.Bools.ContainsValue(b));
-            Assert.IsTrue(plotDb.Bools.ContainsKey(b.PlotId));
+            Assert.IsTrue(_plotDb.Floats.ContainsValue(_float));
+            Assert.IsTrue(_plotDb.Floats.ContainsKey(_float.PlotId));
 
-            // Null parent works fine if element already has parent
-            plotDb.AddElement(c, null);
-            Assert.IsTrue(plotDb.Conditionals.ContainsValue(c));
-            Assert.IsTrue(plotDb.Conditionals.ContainsKey(c.PlotId));
+            Assert.IsTrue(_plotDb.Transitions.ContainsValue(_transition));
+            Assert.IsTrue(_plotDb.Transitions.ContainsKey(_transition.PlotId));
         }
 
         [TestMethod]
-        public void TestElementRemoval()
+        public void AddElement_ElementWithNoParent_ThrowsException()
         {
-            // Setup
-            var a = new PlotElement(0, 2, "Category", PlotElementType.Category, null);
-            var b = new PlotBool(1, 3, "Bool", PlotElementType.State, null);
-            var c = new PlotConditional(1, 4, "Conditional", PlotElementType.Conditional, null);
-            var d = new PlotConditional(2, 5, "Conditional2", PlotElementType.Conditional, null);
+            Assert.ThrowsException<Exception>(() => _plotDb.AddElement(_bool, null));
+        }
+        
+        [TestMethod]
+        public void AddElement_NullParentParameter_UsesExistingParent()
+        {
+            _plotDb.AddElement(_bool, _plotDb.Root);
+            _plotDb.AddElement(_conditional, null);
+            
+            Assert.AreEqual(_bool, _conditional.Parent);
+            Assert.IsTrue(_plotDb.Conditionals.ContainsValue(_conditional));
+            
+        }
 
-            plotDb.AddElement(a, plotDb.Root);
-            plotDb.AddElement(b, plotDb.Root);
-            plotDb.AddElement(c, b);
-            plotDb.AddElement(d, b);
+        [TestMethod]
+        public void RemoveElement_CannotRemoveRoot()
+        {
+            Assert.ThrowsException<ArgumentException>(() => _plotDb.RemoveElement(_plotDb.Root)); // Cannot remove root
+        }
 
-            // Pre-flight checks
-            Assert.IsTrue(b.Children.Count > 0);
-            Assert.IsTrue(a.Parent == plotDb.Root);
-            Assert.ThrowsException<ArgumentException>(() => plotDb.RemoveElement(plotDb.Root)); // Cannot remove root
-            Assert.ThrowsException<ArgumentException>(() => plotDb.RemoveElement(b, removeAllChildren: false)); // If element has children, error is thrown by default
+        [TestMethod]
+        public void RemoveElement_RemovesFromDatabase()
+        {
+            _plotDb.AddElement(_category, _plotDb.Root);
+            
+            _plotDb.RemoveElement(_category);
+            Assert.IsFalse(_plotDb.Organizational.ContainsKey(_category.RelevantId));
+            Assert.IsFalse(_plotDb.Organizational.ContainsValue(_category));
+        }
 
-            // Actual testing
-            plotDb.RemoveElement(a);
-            Assert.IsNull(a.Parent);
-            Assert.IsFalse(plotDb.Organizational.ContainsKey(a.RelevantId));
-            Assert.IsFalse(plotDb.Organizational.ContainsValue(a));
+        [TestMethod]
+        public void RemoveElement_RemoveAllChildren_RemovesFromCorrectCategories()
+        {
+            AddAllTestElementsToDb();
+            
+            Assert.ThrowsException<ArgumentException>(() => _plotDb.RemoveElement(_bool, removeAllChildren: false)); // If element has children, error is thrown by default
+            
+            _plotDb.RemoveElement(_bool, removeAllChildren:true);
+            Assert.IsFalse(_plotDb.Bools.ContainsValue(_bool));
+            Assert.IsFalse(_plotDb.Conditionals.ContainsValue(_conditional));
+            Assert.IsFalse(_plotDb.Ints.ContainsValue(_integer));
+            Assert.IsFalse(_plotDb.Floats.ContainsValue(_float));
+            Assert.IsFalse(_plotDb.Transitions.ContainsValue(_transition));
+        }
 
-            plotDb.RemoveElement(b, removeAllChildren:true);
-            Assert.IsFalse(plotDb.Bools.ContainsValue(b));
-            Assert.IsTrue(b.Children.Count == 0);
-            Assert.IsFalse(plotDb.Conditionals.ContainsValue(c));
-            Assert.IsFalse(plotDb.Conditionals.ContainsValue(d));
+        [TestMethod]
+        public void GetNextElementId_ProvidesNextAvailableId()
+        {
+            Assert.AreEqual(2, _plotDb.GetNextElementId());
+            
+            AddAllTestElementsToDb();
+            Assert.AreEqual(8, _plotDb.GetNextElementId());
+        }
 
+        [TestMethod]
+        public void GetMasterDictionary_ReturnsAllElements()
+        {
+            AddAllTestElementsToDb();
+            var elements = new [] { _category, _bool, _conditional, _float, _transition, _integer };
+
+            var masterDictionary = _plotDb.GetMasterDictionary();
+            foreach (var e in elements)
+            {
+                Assert.IsTrue(masterDictionary.ContainsKey(e.ElementId));
+                Assert.AreEqual(e, masterDictionary[e.ElementId]);
+            }
+
+        }
+
+        [TestMethod]
+        public void GetMasterDictionary_DuplicateElementIds_ReturnsEmpty()
+        {
+            var dup = new PlotBool(16, 3, "BoolDuplicate", PlotElementType.State, null);
+            _plotDb.AddElement(_bool, _plotDb.Root);
+            _plotDb.AddElement(dup, _plotDb.Root);
+
+            var masterDictionary = _plotDb.GetMasterDictionary();
+            Assert.IsNotNull(masterDictionary);
+            Assert.AreEqual(0, masterDictionary.Count);
+        }
+
+        [TestMethod]
+        public void GetElementById_ReturnsCorrectElements()
+        {
+            AddAllTestElementsToDb();
+            Assert.AreEqual(_bool, _plotDb.GetElementById(_bool.ElementId));
+            Assert.AreEqual(_transition, _plotDb.GetElementById(_transition.ElementId));
+            
+            Assert.IsNull(_plotDb.GetElementById(60));
         }
     }
 }

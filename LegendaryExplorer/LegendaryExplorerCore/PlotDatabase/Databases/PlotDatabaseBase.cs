@@ -16,17 +16,19 @@ namespace LegendaryExplorerCore.PlotDatabase.Databases
         /// <summary>Gets the root element of the plot tree</summary>
         public virtual PlotElement Root { get; protected set; }
         /// <summary>A table of boolean plot variables, ordered by in-game variable id</summary>
-        public Dictionary<int, PlotBool> Bools { get; set; } = new Dictionary<int, PlotBool>();
+        public Dictionary<int, PlotBool> Bools { get; protected set; } 
         /// <summary>A table of integer plot variables, ordered by in-game variable id</summary>
-        public Dictionary<int, PlotElement> Ints { get; set; } = new Dictionary<int, PlotElement>();
+        public Dictionary<int, PlotElement> Ints { get; protected set; } 
         /// <summary>A table of float plot variables, ordered by in-game variable id</summary>
-        public Dictionary<int, PlotElement> Floats { get; set; } = new Dictionary<int, PlotElement>();
+        public Dictionary<int, PlotElement> Floats { get; protected set; } 
         /// <summary>A table of conditional functions, ordered by in-game conditional id</summary>
-        public Dictionary<int, PlotConditional> Conditionals { get; set; } = new Dictionary<int, PlotConditional>();
+        public Dictionary<int, PlotConditional> Conditionals { get; protected set; }
+
         /// <summary>A table of plot transitions, ordered by in-game transition id</summary>
-        public Dictionary<int, PlotTransition> Transitions { get; set; } = new Dictionary<int, PlotTransition>();
+        public Dictionary<int, PlotTransition> Transitions { get; protected set; }
+
         /// <summary>A table of organizational plot elements, ordered by plot element id</summary>
-        public Dictionary<int, PlotElement> Organizational { get; set; } = new Dictionary<int, PlotElement>();
+        public Dictionary<int, PlotElement> Organizational { get; protected set; }
 
         /// <summary>Gets or sets the MEGame associated with this database</summary>
         public MEGame Game { get; set; }
@@ -90,9 +92,7 @@ namespace LegendaryExplorerCore.PlotDatabase.Databases
         public PlotElement GetElementById(int elementId)
         {
             var sorted = GetMasterDictionary();
-            if (sorted.ContainsKey(elementId)) return sorted[elementId];
-
-            return null;
+            return sorted.TryGetValue(elementId, out var id) ? id : null;
         }
 
         /// <summary>

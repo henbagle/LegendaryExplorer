@@ -135,33 +135,33 @@ namespace LegendaryExplorerCore.PlotDatabase.PlotElements
         /// <summary>
         /// Initializes a new PlotElement
         /// </summary>
-        /// <param name="plotid">PlotID of new element</param>
-        /// <param name="elementid">ElementID of new element</param>
+        /// <param name="plotId">PlotID of new element</param>
+        /// <param name="elementId">ElementID of new element</param>
         /// <param name="label">Label of new element</param>
         /// <param name="type">Type of new element</param>
-        /// <param name="parentelementId">ParentElementID of new element</param>
+        /// <param name="parentElementId">ParentElementID of new element</param>
         /// <param name="children">Children of new element</param>
-        public PlotElement(int plotid, int elementid, string label, PlotElementType type, int parentelementId, List<PlotElement> children = null)
+        public PlotElement(int plotId, int elementId, string label, PlotElementType type, int parentElementId, List<PlotElement> children = null)
         {
-            PlotId = plotid;
-            ElementId = elementid;
+            PlotId = plotId;
+            ElementId = elementId;
             Label = label;
             Type = type;
-            ParentElementId = parentelementId;
+            ParentElementId = parentElementId;
             Children.AddRange(children ?? new List<PlotElement>());
         }
 
         /// <summary>
         /// Initializes a new PlotElement
         /// </summary>
-        /// <param name="plotid">PlotID of new element</param>
-        /// <param name="elementid">ElementID of new element</param>
+        /// <param name="plotId">PlotID of new element</param>
+        /// <param name="elementId">ElementID of new element</param>
         /// <param name="label">Label of new element</param>
         /// <param name="type">Type of new element</param>
         /// <param name="parent">Parent PlotElement of new element</param>
         /// <param name="children">Children of new element</param>
-        public PlotElement(int plotid, int elementid, string label, PlotElementType type, PlotElement parent, List<PlotElement> children = null)
-            : this(plotid, elementid, label, type, -1, children)
+        public PlotElement(int plotId, int elementId, string label, PlotElementType type, PlotElement parent, List<PlotElement> children = null)
+            : this(plotId, elementId, label, type, -1, children)
         {
             AssignParent(parent);
         }
@@ -191,15 +191,12 @@ namespace LegendaryExplorerCore.PlotDatabase.PlotElements
         /// <returns><c>true</c> if a parent was removed, <c>false</c> otherwise</returns>
         public bool RemoveFromParent()
         {
-            if (Parent != null)
-            {
-                Parent.Children.RemoveAll((i) => i == this);
-                Parent = null;
-                ParentElementId = -1;
-                return true;
-            }
-
-            return false;
+            if (Parent == null) return false;
+            
+            Parent.Children.RemoveAll((i) => i == this);
+            Parent = null;
+            ParentElementId = -1;
+            return true;
         }
 
         /// <summary>
@@ -208,7 +205,7 @@ namespace LegendaryExplorerCore.PlotDatabase.PlotElements
         /// <param name="id">New element id</param>
         public void SetElementId(int id)
         {
-            this.ElementId = id;
+            ElementId = id;
             foreach (var c in Children)
             {
                 c.ParentElementId = id;
